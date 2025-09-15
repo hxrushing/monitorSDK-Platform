@@ -58,6 +58,23 @@ const EventDefinitionManager: React.FC<EventDefinitionManagerProps> = ({ project
         setIsModalVisible(false);
         form.resetFields();
         fetchDefinitions();
+      } else {
+        switch (data.code) {
+          case 'INVALID_PARAMS':
+            message.error('缺少必要参数');
+            break;
+          case 'INVALID_EVENT_NAME':
+            message.error('事件名称格式不正确');
+            break;
+          case 'DUPLICATE_EVENT_NAME':
+            message.error('事件名称重复');
+            break;
+          case 'PROJECT_NOT_FOUND':
+            message.error('项目不存在');
+            break;
+          default:
+            message.error(data.error || '创建失败');
+        }
       }
     } catch (error) {
       message.error('创建失败');

@@ -1,6 +1,6 @@
 import express from 'express';
 import { StatsService } from '../services/statsService';
-import { EventDefinitionService } from '../services/eventDefinitionService';
+import { EventDefinitionService, AppError } from '../services/eventDefinitionService';
 import { TrackingService } from '../services/trackingService';
 import { UserService } from '../services/userService';
 import { Connection } from 'mysql2/promise';
@@ -93,11 +93,22 @@ export function createApiRouter(db: Connection) {
   // 创建事件定义
   router.post('/event-definitions', async (req, res) => {
     try {
+      const { projectId, eventName, description, paramsSchema } = req.body || {};
+      if (!projectId || !eventName || !description || paramsSchema == null) {
+        return res.status(400).json({ success: false, code: 'INVALID_PARAMS', error: '缺少必要参数' });
+      }
+      if (typeof eventName !== 'string' || !/^[a-zA-Z][a-zA-Z0-9_]*$/.test(eventName)) {
+        return res.status(400).json({ success: false, code: 'INVALID_EVENT_NAME', error: '事件名称格式不正确' });
+      }
+
       const data = await eventDefinitionService.createEventDefinition(req.body);
       res.status(201).json({ success: true, data });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error creating event definition:', error);
-      res.status(500).json({ success: false, error: 'Internal Server Error' });
+      if (error instanceof AppError) {
+        return res.status(error.status).json({ success: false, code: error.code, error: error.message });
+      }
+      res.status(500).json({ success: false, code: 'INTERNAL_ERROR', error: 'Internal Server Error' });
     }
   });
 

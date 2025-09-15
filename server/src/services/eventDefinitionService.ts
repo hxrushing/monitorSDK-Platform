@@ -9,6 +9,17 @@ export interface EventDefinition {
   paramsSchema: Record<string, any>;
 }
 
+// 业务错误类型
+export class AppError extends Error {
+  code: string;
+  status: number;
+  constructor(code: string, message: string, status: number = 400) {
+    super(message);
+    this.code = code;
+    this.status = status;
+  }
+}
+
 export class EventDefinitionService {
   constructor(private db: Connection) {}
 
@@ -54,16 +65,29 @@ export class EventDefinitionService {
   // 创建事件定义
   async createEventDefinition(eventDef: EventDefinition) {
     const id = uuidv4();
-    await this.db.execute(
-      'INSERT INTO event_definitions (id, project_id, event_name, description, params_schema) VALUES (?, ?, ?, ?, ?)',
-      [
-        id,
-        eventDef.projectId,
-        eventDef.eventName,
-        eventDef.description,
-        JSON.stringify(eventDef.paramsSchema)
-      ]
-    );
+    try {
+      await this.db.execute(
+        'INSERT INTO event_definitions (id, project_id, event_name, description, params_schema) VALUES (?, ?, ?, ?, ?)',
+        [
+          id,
+          eventDef.projectId,
+          eventDef.eventName,
+          eventDef.description,
+          JSON.stringify(eventDef.paramsSchema)
+        ]
+      );
+    } catch (err: any) {
+      // MySQL 唯一键冲突
+      if (err && (err.code === 'ER_DUP_ENTRY' || err.errno === 1062)) {
+        throw new AppError('DUPLICATE_EVENT_NAME', '事件名称已存在', 409);
+      }
+      // 外键失败（项目不存在）
+      if (err && (err.code === 'ER_NO_REFERENCED_ROW_2' || err.errno === 1452)) {
+        throw new AppError('PROJECT_NOT_FOUND', '项目不存在或已被删除', 404);
+      }
+      console.error('创建事件定义失败:', err);
+      throw new AppError('CREATE_EVENT_FAILED', '创建事件定义失败', 500);
+    }
 
     return {
       ...eventDef,

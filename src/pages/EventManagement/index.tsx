@@ -62,8 +62,24 @@ const EventManagement: React.FC = () => {
       setIsModalVisible(false);
       form.resetFields();
       fetchDefinitions();
-    } catch (error) {
-      message.error('创建失败');
+    } catch (error: any) {
+      const code = error?.response?.data?.code;
+      switch (code) {
+        case 'INVALID_PARAMS':
+          message.error('缺少必要参数');
+          break;
+        case 'INVALID_EVENT_NAME':
+          message.error('事件名称格式不正确');
+          break;
+        case 'DUPLICATE_EVENT_NAME':
+          message.error('事件名称重复');
+          break;
+        case 'PROJECT_NOT_FOUND':
+          message.error('项目不存在');
+          break;
+        default:
+          message.error(error?.response?.data?.error || '创建失败');
+      }
     }
   };
 
