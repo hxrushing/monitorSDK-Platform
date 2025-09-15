@@ -1,0 +1,29 @@
+.floating-panel {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  border-radius: 4px;
+  transition: box-shadow 0.3s;
+
+  &:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  }
+
+  .floating-panel-header {
+    display: flex;
+    align-items: center;
+    cursor: move;
+    user-select: none;
+    
+    .anticon {
+      color: #1890ff;
+    }
+  }
+
+  .ant-card-head {
+    padding: 0 12px;
+    min-height: 40px;
+  }
+
+  .ant-card-body {
+    padding: 12px;
+  }
+} 
