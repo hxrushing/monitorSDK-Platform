@@ -88,7 +88,7 @@ export class TrackingService {
           id,
           projectId,
           eventName,
-          `Auto-created event: ${eventName}`,
+          eventName, // 描述不再添加前缀，直接使用事件名
           '{}'
         ]
       );

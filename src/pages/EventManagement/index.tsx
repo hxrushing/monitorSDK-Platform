@@ -250,12 +250,14 @@ const EventManagement: React.FC = () => {
           <Form.Item
             name="eventName"
             label="事件名称"
-            rules={[
+            rules={editingDefinition ? [
+              { required: true, message: '请输入事件名称' }
+            ] : [
               { required: true, message: '请输入事件名称' },
               { pattern: /^[a-zA-Z][a-zA-Z0-9_]*$/, message: '事件名称只能包含字母、数字和下划线，且必须以字母开头' }
             ]}
           >
-            <Input placeholder="例如：page_view, button_click" />
+            <Input placeholder={editingDefinition ? '请输入事件名称' : '例如：page_view, button_click'} />
           </Form.Item>
           
           <Form.Item

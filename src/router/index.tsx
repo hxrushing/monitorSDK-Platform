@@ -7,6 +7,7 @@ import EventManagement from '@/pages/EventManagement';
 import Login from '@/pages/login';
 import Register from '@/pages/register';
 import App from '@/App';
+import SDKDemo from '@/pages/sdk-demo';
 
 const router = createBrowserRouter([
   {
@@ -36,6 +37,10 @@ const router = createBrowserRouter([
       {
         path: 'event-management',
         element: <EventManagement />,
+      },
+      {
+        path: 'sdk-demo',
+        element: <SDKDemo />,
       },
     ],
   },
