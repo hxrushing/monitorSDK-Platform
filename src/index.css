@@ -1,0 +1,47 @@
+:root[data-theme='light'] {
+  --app-bg: #f5f5f5;
+  --app-text: rgba(0, 0, 0, 0.88);
+  --sider-bg: #e6f4ff; /* 浅蓝 */
+  --sider-fg: #1d39c4;
+  --sider-selected-bg: #bae0ff;
+  --sider-selected-fg: #10239e;
+}
+
+:root[data-theme='dark'] {
+  --app-bg: #141414;
+  --app-text: rgba(255, 255, 255, 0.85);
+  --sider-bg: #0b1f3a; /* 深蓝调 */
+  --sider-fg: rgba(255, 255, 255, 0.85);
+  --sider-selected-bg: #102a44;
+  --sider-selected-fg: #e6f4ff;
+}
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  background: var(--app-bg);
+  color: var(--app-text);
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+/* 覆盖 antd 侧栏与菜单背景与选中态 */
+.ant-layout-sider {
+  background: var(--sider-bg) !important;
+}
+.ant-layout-sider .ant-menu {
+  background: transparent !important;
+}
+.ant-layout-sider .ant-menu-item {
+  color: var(--sider-fg);
+}
+.ant-layout-sider .ant-menu-item-selected,
+.ant-layout-sider .ant-menu-item-active {
+  background: var(--sider-selected-bg) !important;
+  color: var(--sider-selected-fg) !important;
+}
+.ant-layout-sider .ant-menu-item-selected .anticon,
+.ant-layout-sider .ant-menu-item .anticon {
+  color: currentColor;
+}

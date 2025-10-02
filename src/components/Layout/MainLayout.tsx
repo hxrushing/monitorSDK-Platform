@@ -8,7 +8,7 @@ import {
   ApartmentOutlined,
   UserOutlined
 } from '@ant-design/icons';
-import { Layout, Menu, Button, theme, Select, Modal, Form, Input, message, Dropdown, Space } from 'antd';
+import { Layout, Menu, Button, theme, Select, Modal, Form, Input, message, Dropdown, Space, Switch, Tooltip } from 'antd';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useTheme } from '@/hooks/useTheme';
 import { apiService, Project } from '@/services/api';
@@ -28,12 +28,15 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const { colorBgContainer } = useTheme();
+  const { token } = theme.useToken();
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [form] = Form.useForm();
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedProject, setSelectedProject] = useState<string>('demo-project');
   const userInfo = useGlobalStore(state => state.userInfo);
   const setUserInfo = useGlobalStore(state => state.setUserInfo);
+  const themeMode = useGlobalStore(state => state.themeMode);
+  const setThemeMode = useGlobalStore(state => state.setThemeMode);
   const [logoPosition, setLogoPosition] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const userInfoRef = useRef<HTMLDivElement>(null);
@@ -176,7 +179,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
-      <Sider trigger={null} collapsible collapsed={collapsed}>
+      <Sider trigger={null} collapsible collapsed={collapsed} theme={themeMode === 'dark' ? 'dark' : 'light'}>
         <div
           ref={logoRef}
           draggable
@@ -189,7 +192,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            background: 'rgba(255, 255, 255, 0.1)',
+            background: themeMode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0,0,0,0.04)',
             borderRadius: '8px',
             padding: '4px',
             transition: 'all 0.3s',
@@ -212,7 +215,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
           />
         </div>
         <Menu
-          theme="dark"
+          theme={themeMode === 'dark' ? 'dark' : 'light'}
           mode="inline"
           selectedKeys={[location.pathname]}
           items={menuItems}
@@ -229,6 +232,14 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
               style={{ fontSize: '16px', width: 64, height: 64 }}
             />
             <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+              <Tooltip title={themeMode === 'dark' ? '切换为浅色' : '切换为暗色'}>
+                <Switch
+                  checkedChildren="🌙"
+                  unCheckedChildren="☀️"
+                  checked={themeMode === 'dark'}
+                  onChange={(checked) => setThemeMode(checked ? 'dark' : 'light')}
+                />
+              </Tooltip>
               <Select
                 value={selectedProject}
                 style={{ width: 200 }}
