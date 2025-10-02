@@ -117,9 +117,9 @@ const SDKDemo: React.FC = () => {
         </div>
         <div style={descStyle}>页面加载时已自动上报「页面浏览」。点击下方按钮可体验事件上报。</div>
         <div style={gridStyle}>
-          <button style={primaryBtn} onClick={handlePrimary}>立即购买</button>
-          <button style={secondaryBtn} onClick={handleSecondary}>加入收藏</button>
-          <button style={ghostBtn} onClick={handleGhost}>更多操作</button>
+          <button style={primaryBtn} onClick={handlePrimary}>点击事件1</button>
+          <button style={secondaryBtn} onClick={handleSecondary}>点击事件2</button>
+          <button style={ghostBtn} onClick={handleGhost}>点击事件3</button>
         </div>
       </div>
     </div>
