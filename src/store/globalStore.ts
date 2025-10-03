@@ -15,6 +15,14 @@ interface GlobalState {
   setUserInfo: (userInfo: UserInfo | null) => void
   themeMode: 'light' | 'dark'
   setThemeMode: (mode: 'light' | 'dark') => void
+  siteSettings: {
+    siteName: string
+    organizationName: string
+    logoUrl: string
+    primaryColor: string
+    componentSize: 'small' | 'middle' | 'large'
+  }
+  setSiteSettings: (settings: Partial<GlobalState['siteSettings']>) => void
 }
 
 // 从localStorage获取初始用户信息
@@ -27,6 +35,31 @@ const getInitialUserInfo = (): UserInfo | null => {
 const getInitialThemeMode = (): 'light' | 'dark' => {
   const storedTheme = localStorage.getItem('themeMode');
   return storedTheme === 'dark' ? 'dark' : 'light';
+};
+
+const getInitialSiteSettings = () => {
+  const raw = localStorage.getItem('siteSettings');
+  if (raw) {
+    try {
+      const parsed = JSON.parse(raw);
+      return {
+        siteName: parsed.siteName ?? '埋点分析平台',
+        organizationName: parsed.organizationName ?? 'Demo Org',
+        logoUrl: parsed.logoUrl ?? '',
+        primaryColor: parsed.primaryColor ?? '#1677ff',
+        componentSize: parsed.componentSize ?? 'middle'
+      } as GlobalState['siteSettings'];
+    } catch {
+      // fallthrough to default
+    }
+  }
+  return {
+    siteName: '埋点分析平台',
+    organizationName: 'Demo Org',
+    logoUrl: '',
+    primaryColor: '#1677ff',
+    componentSize: 'middle'
+  } as GlobalState['siteSettings'];
 };
 
 const useGlobalStore = create<GlobalState>(set => ({
@@ -44,6 +77,14 @@ const useGlobalStore = create<GlobalState>(set => ({
   setThemeMode: (mode) => {
     localStorage.setItem('themeMode', mode);
     set({ themeMode: mode });
+  },
+  siteSettings: getInitialSiteSettings(),
+  setSiteSettings: (settings) => {
+    set(state => {
+      const next = { ...state.siteSettings, ...settings };
+      localStorage.setItem('siteSettings', JSON.stringify(next));
+      return { siteSettings: next } as Partial<GlobalState>;
+    });
   }
 }))
 export default useGlobalStore

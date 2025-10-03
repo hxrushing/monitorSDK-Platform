@@ -31,9 +31,11 @@ const Login: React.FC = () => {
     }
   };
 
+  const siteName = useGlobalStore(state => state.siteSettings.siteName)
+
   return (
     <div className="login-container">
-      <Card className="login-card" title="埋点分析平台">
+      <Card className="login-card" title={siteName}>
         <Form
           name="login"
           initialValues={{ remember: true }}

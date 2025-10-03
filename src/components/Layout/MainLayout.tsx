@@ -28,7 +28,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const { colorBgContainer } = useTheme();
-  const { token } = theme.useToken();
+  theme.useToken();
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [form] = Form.useForm();
   const [projects, setProjects] = useState<Project[]>([]);
@@ -37,7 +37,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   const setUserInfo = useGlobalStore(state => state.setUserInfo);
   const themeMode = useGlobalStore(state => state.themeMode);
   const setThemeMode = useGlobalStore(state => state.setThemeMode);
-  const [logoPosition, setLogoPosition] = useState({ x: 0, y: 0 });
+  const siteSettings = useGlobalStore(state => state.siteSettings);
   const [isDragging, setIsDragging] = useState(false);
   const userInfoRef = useRef<HTMLDivElement>(null);
   const logoRef = useRef<HTMLDivElement>(null);
@@ -70,50 +70,86 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
     fetchProjects();
   }, []);
 
-  const isAdmin = userInfo?.role === 'Admin' || (userInfo && !('role' in userInfo) && userInfo.username === 'admin');
+  const isAdmin = (userInfo as any)?.role === 'Admin' || ((userInfo as any)?.username === 'admin');
 
-  const baseMenu = [
-    {
-      key: '/app/dashboard',
-      icon: <DashboardOutlined />,
-      label: '数据概览',
-    },
-    {
-      key: '/app/events',
-      icon: <LineChartOutlined />,
-      label: '事件分析',
-    },
-    {
-      key: '/app/funnel',
-      icon: <ApartmentOutlined />,
-      label: '漏斗分析',
-    },
-  ];
+  // 菜单分组：分析 / 管理 / 系统
+  const [openKeys, setOpenKeys] = useState<string[]>([]);
 
-  const adminOnlyMenu = [
+  const PATH_TO_GROUP_KEY: Record<string, string> = {
+    '/app/dashboard': 'group-analysis',
+    '/app/events': 'group-analysis',
+    '/app/funnel': 'group-analysis',
+    '/app/event-management': 'group-management',
+    '/app/member-management': 'group-management',
+    '/app/settings': 'group-system',
+    '/app/sdk-demo': 'group-system'
+  };
+
+  const menuItems = [
     {
-      key: '/app/event-management',
-      icon: <SettingOutlined />,
-      label: (
-        <Tooltip title={!isAdmin ? '需要管理员权限，点击可申请权限' : undefined}>
-          <span>事件管理</span>
-        </Tooltip>
-      ),
-      disabled: !isAdmin,
+      key: 'group-analysis',
+      label: '分析',
+      children: [
+        {
+          key: '/app/dashboard',
+          icon: <DashboardOutlined />,
+          label: '看板',
+        },
+        {
+          key: '/app/events',
+          icon: <LineChartOutlined />,
+          label: '事件',
+        },
+        {
+          key: '/app/funnel',
+          icon: <ApartmentOutlined />,
+          label: '漏斗',
+        },
+      ]
     },
     {
-      key: '/app/member-management',
-      icon: <UserOutlined />,
-      label: (
-        <Tooltip title={!isAdmin ? '需要管理员权限，点击可申请权限' : undefined}>
-          <span>成员管理</span>
-        </Tooltip>
-      ),
-      disabled: !isAdmin,
+      key: 'group-management',
+      label: '管理',
+      children: [
+        {
+          key: '/app/event-management',
+          icon: <SettingOutlined />,
+          label: (
+            <Tooltip title={!isAdmin ? '需要管理员权限' : undefined}>
+              <span>事件定义</span>
+            </Tooltip>
+          ),
+          disabled: !isAdmin
+        },
+        {
+          key: '/app/member-management',
+          icon: <UserOutlined />,
+          label: (
+            <Tooltip title={!isAdmin ? '需要管理员权限' : undefined}>
+              <span>成员</span>
+            </Tooltip>
+          ),
+          disabled: !isAdmin
+        }
+      ]
+    },
+    {
+      key: 'group-system',
+      label: '系统',
+      children: [
+        {
+          key: '/app/settings',
+          icon: <SettingOutlined />,
+          label: '设置'
+        },
+        {
+          key: '/app/sdk-demo',
+          icon: <SettingOutlined />,
+          label: 'SDK 模板'
+        }
+      ]
     }
   ];
-
-  const menuItems = [...baseMenu, ...adminOnlyMenu];
 
   const handleCreateProject = async (values: any) => {
     try {
@@ -134,13 +170,24 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   };
 
   const handleMenuClick = ({ key }: { key: string }) => {
-    const item = menuItems.find(m => m.key === key);
-    if (item && (item as any).disabled && !isAdmin) {
-      message.warning('当前功能需要管理员权限，请联系管理员或前往成员管理申请权限');
+    // 在分组结构下需要检查子项权限
+    const isChildDisabled = menuItems
+      .flatMap((g: any) => g.children || [])
+      .some((c: any) => c.key === key && c.disabled);
+    if (isChildDisabled && !isAdmin) {
+      message.warning('当前功能需要管理员权限，请联系管理员');
       return;
     }
     navigate(key);
   };
+
+  // 根据当前路径，自动展开所属分组
+  useEffect(() => {
+    const groupKey = PATH_TO_GROUP_KEY[location.pathname];
+    if (groupKey) {
+      setOpenKeys([groupKey]);
+    }
+  }, [location.pathname]);
 
   const userMenuItems = [
     {
@@ -151,15 +198,8 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
     }
   ];
 
-  const handleDragStart = (e: React.DragEvent) => {
+  const handleDragStart = () => {
     setIsDragging(true);
-    const rect = logoRef.current?.getBoundingClientRect();
-    if (rect) {
-      setLogoPosition({
-        x: e.clientX - rect.left,
-        y: e.clientY - rect.top
-      });
-    }
   };
 
   const handleDrag = (e: React.DragEvent) => {
@@ -188,9 +228,9 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
       );
       
       // 调试信息
-      console.log('Logo center:', logoCenter);
-      console.log('UserInfo center:', userInfoCenter);
-      console.log('Distance:', distance);
+      // console.log('Logo center:', logoCenter);
+      // console.log('UserInfo center:', userInfoCenter);
+      // console.log('Distance:', distance);
       
       // 当距离小于150像素时触发（增加触发范围）
       if (distance < 150 && userInfo) {
@@ -233,7 +273,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
           }}
         >
           <img 
-            src={collapsed ? logo1 : logo2} 
+            src={siteSettings.logoUrl || (collapsed ? logo1 : logo2)} 
             alt="Logo" 
             style={{ 
               height: '100%',
@@ -249,7 +289,9 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
           theme={themeMode === 'dark' ? 'dark' : 'light'}
           mode="inline"
           selectedKeys={[location.pathname]}
-          items={menuItems}
+          openKeys={openKeys}
+          onOpenChange={setOpenKeys}
+          items={menuItems as any}
           onClick={handleMenuClick as any}
         />
       </Sider>
@@ -263,6 +305,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
               style={{ fontSize: '16px', width: 64, height: 64 }}
             />
             <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+              <span style={{ fontWeight: 600 }}>{siteSettings.siteName}</span>
               <Tooltip title={themeMode === 'dark' ? '切换为浅色' : '切换为暗色'}>
                 <Switch
                   checkedChildren="🌙"

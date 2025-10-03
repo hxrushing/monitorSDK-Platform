@@ -1,5 +1,5 @@
 // src/router/index.tsx
-import { createBrowserRouter, Navigate } from 'react-router-dom';
+import { createBrowserRouter } from 'react-router-dom';
 import Dashboard from '@/pages/Dashboard';
 import EventAnalysis from '@/pages/EventAnalysis';
 import FunnelAnalysis from '@/pages/FunnelAnalysis';
@@ -9,6 +9,7 @@ import Register from '@/pages/register';
 import App from '@/App';
 import SDKDemo from '@/pages/sdk-demo';
 import MemberManagement from '@/pages/MemberManagement';
+import SystemSettings from '@/pages/SystemSettings';
 
 const router = createBrowserRouter([
   {
@@ -46,6 +47,10 @@ const router = createBrowserRouter([
       {
         path: 'sdk-demo',
         element: <SDKDemo />,
+      },
+      {
+        path: 'settings',
+        element: <SystemSettings />,
       },
     ],
   },

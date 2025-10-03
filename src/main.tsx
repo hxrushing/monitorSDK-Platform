@@ -9,6 +9,7 @@ import useGlobalStore from '@/store/globalStore'
 
 const Root = () => {
   const themeMode = useGlobalStore(state => state.themeMode)
+  const siteSettings = useGlobalStore(state => state.siteSettings)
 
   // 设置 HTML 属性，便于自定义样式选择
   if (typeof document !== 'undefined') {
@@ -19,8 +20,10 @@ const Root = () => {
     <ConfigProvider
       locale={zhCN}
       theme={{
-        algorithm: themeMode === 'dark' ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm
+        algorithm: themeMode === 'dark' ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm,
+        token: { colorPrimary: siteSettings.primaryColor }
       }}
+      componentSize={siteSettings.componentSize}
     >
       <RouterProvider router={router} />
     </ConfigProvider>
