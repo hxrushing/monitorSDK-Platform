@@ -4,6 +4,7 @@ interface UserInfo {
   id: string;
   username: string;
   email: string;
+  role: 'Admin' | 'User';
   created_at: string;
   updated_at: string;
 }

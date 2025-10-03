@@ -6,6 +6,15 @@ const api = axios.create({
   timeout: 10000,
 });
 
+export interface UserItem {
+  id: string;
+  username: string;
+  email: string;
+  role: 'Admin' | 'User';
+  created_at: string;
+  updated_at: string;
+}
+
 // 统计数据接口
 export interface StatsQuery {
   projectId: string;
@@ -162,6 +171,16 @@ export const apiService = {
   }): Promise<TopProject[]> {
     const { data } = await api.get('/top-projects', { params });
     return data.data;
+  },
+
+  // 用户列表与角色
+  async getUsers(): Promise<UserItem[]> {
+    const { data } = await api.get('/users');
+    return data.data;
+  },
+
+  async updateUserRole(id: string, role: 'Admin' | 'User'): Promise<void> {
+    await api.put(`/users/${id}/role`, { role });
   },
 
   // 用户注册

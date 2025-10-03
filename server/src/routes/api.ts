@@ -59,6 +59,41 @@ export function createApiRouter(db: Connection) {
     }
   });
 
+  // 获取用户列表
+  router.get('/users', async (req, res) => {
+    try {
+      const [rows] = await db.execute('SELECT id, username, email, role, created_at, updated_at FROM users ORDER BY created_at DESC');
+      res.json({ success: true, data: rows });
+    } catch (error: any) {
+      console.error('获取用户列表失败:', error);
+      // 常见错误识别
+      const code = error?.code || error?.errno;
+      if (code === 'ER_NO_SUCH_TABLE' || code === 1146) {
+        return res.status(500).json({ success: false, error: "数据库缺少表 'users'，请先执行初始化脚本或运行建表 SQL", code, message: error?.message });
+      }
+      if (code === 'ER_ACCESS_DENIED_ERROR' || code === 1045) {
+        return res.status(500).json({ success: false, error: '数据库访问被拒绝，请检查 server/.env 中数据库账号与权限', code, message: error?.message });
+      }
+      return res.status(500).json({ success: false, error: 'Internal Server Error', code, message: error?.message });
+    }
+  });
+
+  // 更新用户角色
+  router.put('/users/:id/role', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { role } = req.body || {};
+      if (role !== 'Admin' && role !== 'User') {
+        return res.status(400).json({ success: false, error: '角色值不合法' });
+      }
+      await db.execute('UPDATE users SET role = ? WHERE id = ?', [role, id]);
+      res.json({ success: true });
+    } catch (error) {
+      console.error('更新用户角色失败:', error);
+      res.status(500).json({ success: false, error: 'Internal Server Error' });
+    }
+  });
+
   // 事件追踪接口
   router.post('/track', async (req, res) => {
     try {

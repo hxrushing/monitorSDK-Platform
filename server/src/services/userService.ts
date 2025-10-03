@@ -7,6 +7,7 @@ export interface User {
   username: string;
   password: string;
   email: string;
+  role: 'Admin' | 'User';
   created_at: Date;
   updated_at: Date;
 }
@@ -54,11 +55,11 @@ export class UserService {
         };
       }
 
-      // 创建新用户
+      // 创建新用户（默认角色 User）
       const userId = uuidv4();
       await this.db.execute(
-        'INSERT INTO users (id, username, password, email) VALUES (?, ?, ?, ?)',
-        [userId, username, this.hashPassword(password), email]
+        'INSERT INTO users (id, username, password, email, role) VALUES (?, ?, ?, ?, ?)',
+        [userId, username, this.hashPassword(password), email, 'User']
       );
 
       return {
@@ -124,7 +125,7 @@ export class UserService {
   async getUserInfo(userId: string): Promise<Omit<User, 'password'> | null> {
     try {
       const [rows] = await this.db.execute(
-        'SELECT id, username, email, created_at, updated_at FROM users WHERE id = ?',
+        'SELECT id, username, email, role, created_at, updated_at FROM users WHERE id = ?',
         [userId]
       );
       

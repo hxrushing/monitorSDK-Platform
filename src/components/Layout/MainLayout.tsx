@@ -70,7 +70,9 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
     fetchProjects();
   }, []);
 
-  const menuItems = [
+  const isAdmin = userInfo?.role === 'Admin' || (userInfo && !('role' in userInfo) && userInfo.username === 'admin');
+
+  const baseMenu = [
     {
       key: '/app/dashboard',
       icon: <DashboardOutlined />,
@@ -86,12 +88,32 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
       icon: <ApartmentOutlined />,
       label: '漏斗分析',
     },
+  ];
+
+  const adminOnlyMenu = [
     {
       key: '/app/event-management',
       icon: <SettingOutlined />,
-      label: '事件管理',
+      label: (
+        <Tooltip title={!isAdmin ? '需要管理员权限，点击可申请权限' : undefined}>
+          <span>事件管理</span>
+        </Tooltip>
+      ),
+      disabled: !isAdmin,
     },
+    {
+      key: '/app/member-management',
+      icon: <UserOutlined />,
+      label: (
+        <Tooltip title={!isAdmin ? '需要管理员权限，点击可申请权限' : undefined}>
+          <span>成员管理</span>
+        </Tooltip>
+      ),
+      disabled: !isAdmin,
+    }
   ];
+
+  const menuItems = [...baseMenu, ...adminOnlyMenu];
 
   const handleCreateProject = async (values: any) => {
     try {
@@ -109,6 +131,15 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   const handleLogout = () => {
     setUserInfo(null);
     navigate('/login');
+  };
+
+  const handleMenuClick = ({ key }: { key: string }) => {
+    const item = menuItems.find(m => m.key === key);
+    if (item && (item as any).disabled && !isAdmin) {
+      message.warning('当前功能需要管理员权限，请联系管理员或前往成员管理申请权限');
+      return;
+    }
+    navigate(key);
   };
 
   const userMenuItems = [
@@ -219,7 +250,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
           mode="inline"
           selectedKeys={[location.pathname]}
           items={menuItems}
-          onClick={({ key }) => navigate(key)}
+          onClick={handleMenuClick as any}
         />
       </Sider>
       <Layout>
