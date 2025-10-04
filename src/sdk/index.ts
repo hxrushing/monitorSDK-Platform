@@ -68,6 +68,34 @@ class AnalyticsSDK {
     });
   }
 
+  // 专门用于错误事件的方法
+  public trackError(errorType: string, errorDetails: Record<string, any>) {
+    this.track('error', {
+      错误类型: errorType,
+      ...errorDetails,
+      发生时间: new Date().toISOString()
+    });
+  }
+
+  // 专门用于用户行为事件的方法
+  public trackUserAction(action: string, actionDetails: Record<string, any>) {
+    this.track('userAction', {
+      用户行为: action,
+      ...actionDetails,
+      行为时间: new Date().toISOString()
+    });
+  }
+
+  // 专门用于性能事件的方法
+  public trackPerformance(metric: string, value: number, unit: string = 'ms') {
+    this.track('performance', {
+      性能指标: metric,
+      数值: value,
+      单位: unit,
+      测量时间: new Date().toISOString()
+    });
+  }
+
   private async send(data: any) {
     try {
       const response = await fetch(this.endpoint, {

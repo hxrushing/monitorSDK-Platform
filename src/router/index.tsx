@@ -8,6 +8,7 @@ import Login from '@/pages/login';
 import Register from '@/pages/register';
 import App from '@/App';
 import SDKDemo from '@/pages/sdk-demo';
+import SDKModule from '@/pages/SDKModule';
 import MemberManagement from '@/pages/MemberManagement';
 import SystemSettings from '@/pages/SystemSettings';
 
@@ -47,6 +48,10 @@ const router = createBrowserRouter([
       {
         path: 'sdk-demo',
         element: <SDKDemo />,
+      },
+      {
+        path: 'sdk-module',
+        element: <SDKModule />,
       },
       {
         path: 'settings',

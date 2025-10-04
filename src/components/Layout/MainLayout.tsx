@@ -82,7 +82,8 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
     '/app/event-management': 'group-management',
     '/app/member-management': 'group-management',
     '/app/settings': 'group-system',
-    '/app/sdk-demo': 'group-system'
+    '/app/sdk-demo': 'group-example',
+    '/app/sdk-module': 'group-example'
   };
 
   const menuItems = [
@@ -134,6 +135,22 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
       ]
     },
     {
+      key: 'group-example',
+      label: '示例',
+      children: [
+        {
+          key: '/app/sdk-demo',
+          icon: <SettingOutlined />,
+          label: 'SDK 模板'
+        },
+        {
+          key: '/app/sdk-module',
+          icon: <SettingOutlined />,
+          label: 'SDK 模块'
+        }
+      ]
+    },
+    {
       key: 'group-system',
       label: '系统',
       children: [
@@ -141,11 +158,6 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
           key: '/app/settings',
           icon: <SettingOutlined />,
           label: '设置'
-        },
-        {
-          key: '/app/sdk-demo',
-          icon: <SettingOutlined />,
-          label: 'SDK 模板'
         }
       ]
     }
