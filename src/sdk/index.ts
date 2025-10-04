@@ -18,7 +18,7 @@ interface CommonParams {
 }
 
 class AnalyticsSDK {
-  private static instance: AnalyticsSDK;
+  private static instances: Map<string, AnalyticsSDK> = new Map();
   private commonParams: CommonParams;
   private endpoint: string;
   private projectId: string;
@@ -35,10 +35,27 @@ class AnalyticsSDK {
   }
 
   public static getInstance(projectId: string, endpoint: string): AnalyticsSDK {
-    if (!AnalyticsSDK.instance) {
-      AnalyticsSDK.instance = new AnalyticsSDK(projectId, endpoint);
+    const key = `${projectId}-${endpoint}`;
+    if (!AnalyticsSDK.instances.has(key)) {
+      AnalyticsSDK.instances.set(key, new AnalyticsSDK(projectId, endpoint));
     }
-    return AnalyticsSDK.instance;
+    return AnalyticsSDK.instances.get(key)!;
+  }
+
+  // 清理指定项目的SDK实例
+  public static clearInstance(projectId: string, endpoint: string): void {
+    const key = `${projectId}-${endpoint}`;
+    AnalyticsSDK.instances.delete(key);
+  }
+
+  // 清理所有SDK实例
+  public static clearAllInstances(): void {
+    AnalyticsSDK.instances.clear();
+  }
+
+  // 获取当前实例的项目ID
+  public getProjectId(): string {
+    return this.projectId;
   }
 
   private getDeviceInfo() {

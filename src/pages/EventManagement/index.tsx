@@ -20,6 +20,7 @@ import {
 } from '@ant-design/icons';
 import { apiService } from '@/services/api';
 import type { EventDefinition } from '@/types';
+import useGlobalStore from '@/store/globalStore';
 
 const EventManagement: React.FC = () => {
   const [definitions, setDefinitions] = useState<EventDefinition[]>([]);
@@ -30,12 +31,13 @@ const EventManagement: React.FC = () => {
   const [total, setTotal] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+  const selectedProjectId = useGlobalStore(state => state.selectedProjectId);
 
   // 获取事件定义列表
   const fetchDefinitions = async () => {
     try {
       setLoading(true);
-      const data = await apiService.getEventDefinitions('demo-project');
+      const data = await apiService.getEventDefinitions(selectedProjectId);
       setDefinitions(data);
     } catch (error) {
       message.error('获取事件定义失败');
@@ -46,14 +48,14 @@ const EventManagement: React.FC = () => {
 
   useEffect(() => {
     fetchDefinitions();
-  }, []);
+  }, [selectedProjectId]);
 
   // 创建事件定义
   const handleCreate = async (values: any) => {
     try {
       await apiService.createEventDefinition({
         ...values,
-        projectId: 'demo-project',
+        projectId: selectedProjectId,
         paramsSchema: typeof values.paramsSchema === 'string' 
           ? JSON.parse(values.paramsSchema)
           : values.paramsSchema
@@ -90,7 +92,7 @@ const EventManagement: React.FC = () => {
     try {
       await apiService.updateEventDefinition(editingDefinition.id, {
         ...values,
-        projectId: 'demo-project',
+        projectId: selectedProjectId,
         paramsSchema: typeof values.paramsSchema === 'string'
           ? JSON.parse(values.paramsSchema)
           : values.paramsSchema
@@ -108,7 +110,7 @@ const EventManagement: React.FC = () => {
   // 删除事件定义
   const handleDelete = async (id: string) => {
     try {
-      await apiService.deleteEventDefinition(id, 'demo-project');
+      await apiService.deleteEventDefinition(id, selectedProjectId);
       message.success('删除成功');
       fetchDefinitions();
     } catch (error) {

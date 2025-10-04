@@ -4,6 +4,7 @@ import { Funnel } from '@ant-design/plots';
 import dayjs from 'dayjs';
 import { apiService } from '@/services/api';
 import type { EventDefinition } from '@/types';
+import useGlobalStore from '@/store/globalStore';
 
 const { RangePicker } = DatePicker;
 
@@ -16,11 +17,12 @@ const FunnelAnalysis: React.FC = () => {
   const [eventOptions, setEventOptions] = useState<EventDefinition[]>([]);
   const [selectedStages, setSelectedStages] = useState<string[]>([]);
   const [funnelData, setFunnelData] = useState<any[]>([]);
+  const selectedProjectId = useGlobalStore(state => state.selectedProjectId);
 
   // 获取事件定义列表
   const fetchEventDefinitions = async () => {
     try {
-      const events = await apiService.getEventDefinitions('demo-project');
+      const events = await apiService.getEventDefinitions(selectedProjectId);
       setEventOptions(events);
       // 默认选择所有事件
       setSelectedStages(events.map(e => e.eventName));
@@ -40,7 +42,7 @@ const FunnelAnalysis: React.FC = () => {
     try {
       setLoading(true);
       const data = await apiService.getFunnelAnalysis({
-        projectId: 'demo-project',
+        projectId: selectedProjectId,
         startDate: dateRange[0].format('YYYY-MM-DD'),
         endDate: dateRange[1].format('YYYY-MM-DD'),
         stages: selectedStages
@@ -56,7 +58,7 @@ const FunnelAnalysis: React.FC = () => {
 
   useEffect(() => {
     fetchEventDefinitions();
-  }, []);
+  }, [selectedProjectId]);
 
   const handleSearch = () => {
     fetchFunnelData();

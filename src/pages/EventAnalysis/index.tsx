@@ -4,6 +4,7 @@ import { Line } from '@ant-design/plots';
 import dayjs from 'dayjs';
 import { apiService } from '@/services/api';
 import type { EventDefinition } from '@/types';
+import useGlobalStore from '@/store/globalStore';
 
 const { RangePicker } = DatePicker;
 
@@ -16,11 +17,12 @@ const EventAnalysis: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [eventOptions, setEventOptions] = useState<EventDefinition[]>([]);
   const [analysisData, setAnalysisData] = useState<any[]>([]);
+  const selectedProjectId = useGlobalStore(state => state.selectedProjectId);
 
   // 获取事件定义列表
   const fetchEventDefinitions = async () => {
     try {
-      const events = await apiService.getEventDefinitions('demo-project');
+      const events = await apiService.getEventDefinitions(selectedProjectId);
       setEventOptions(events);
       setSelectedEvents(events.map(e => e.eventName));
     } catch (error) {
@@ -39,7 +41,7 @@ const EventAnalysis: React.FC = () => {
     try {
       setLoading(true);
       const data = await apiService.getEventAnalysis({
-        projectId: 'demo-project',
+        projectId: selectedProjectId,
         startDate: dateRange[0].format('YYYY-MM-DD'),
         endDate: dateRange[1].format('YYYY-MM-DD'),
         events: selectedEvents
@@ -55,7 +57,7 @@ const EventAnalysis: React.FC = () => {
 
   useEffect(() => {
     fetchEventDefinitions();
-  }, []);
+  }, [selectedProjectId]);
 
   const handleSearch = () => {
     fetchAnalysisData();

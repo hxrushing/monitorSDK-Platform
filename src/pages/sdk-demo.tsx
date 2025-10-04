@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import AnalyticsSDK from '@/sdk';
+import useGlobalStore from '@/store/globalStore';
 
 const containerStyle: React.CSSProperties = {
   minHeight: 'calc(100vh - 120px)',
@@ -79,18 +80,23 @@ const ghostBtn: React.CSSProperties = {
 };
 
 const SDKDemo: React.FC = () => {
+  const selectedProjectId = useGlobalStore(state => state.selectedProjectId);
+
   useEffect(() => {
+    // 清理之前的SDK实例
+    AnalyticsSDK.clearAllInstances();
+    
     const sdk = AnalyticsSDK.getInstance(
-      'demo-project',
+      selectedProjectId,
       (import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api') + '/track'
     );
     sdk.setUser('user-123');
-    sdk.track('页面浏览', { 路径: location.pathname });
-  }, []);
+    sdk.track('页面浏览', { 路径: location.pathname, 项目ID: selectedProjectId });
+  }, [selectedProjectId]);
 
   const withSDK = () =>
     AnalyticsSDK.getInstance(
-      'demo-project',
+      selectedProjectId,
       (import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api') + '/track'
     );
 

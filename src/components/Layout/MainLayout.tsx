@@ -32,12 +32,13 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [form] = Form.useForm();
   const [projects, setProjects] = useState<Project[]>([]);
-  const [selectedProject, setSelectedProject] = useState<string>('demo-project');
   const userInfo = useGlobalStore(state => state.userInfo);
   const setUserInfo = useGlobalStore(state => state.setUserInfo);
   const themeMode = useGlobalStore(state => state.themeMode);
   const setThemeMode = useGlobalStore(state => state.setThemeMode);
   const siteSettings = useGlobalStore(state => state.siteSettings);
+  const selectedProjectId = useGlobalStore(state => state.selectedProjectId);
+  const setSelectedProjectId = useGlobalStore(state => state.setSelectedProjectId);
   const [isDragging, setIsDragging] = useState(false);
   const userInfoRef = useRef<HTMLDivElement>(null);
   const logoRef = useRef<HTMLDivElement>(null);
@@ -58,8 +59,8 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
       const projectList = await apiService.getProjects();
       setProjects(projectList);
       // 如果没有选中的项目，选择第一个
-      if (!selectedProject && projectList.length > 0) {
-        setSelectedProject(projectList[0].id);
+      if (!selectedProjectId && projectList.length > 0) {
+        setSelectedProjectId(projectList[0].id);
       }
     } catch (error) {
       message.error('获取项目列表失败');
@@ -327,9 +328,9 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
                 />
               </Tooltip>
               <Select
-                value={selectedProject}
+                value={selectedProjectId}
                 style={{ width: 200 }}
-                onChange={setSelectedProject}
+                onChange={setSelectedProjectId}
               >
                 {projects.map(project => (
                   <Option key={project.id} value={project.id}>

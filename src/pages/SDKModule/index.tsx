@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Card, Button, Space, message, Typography, Divider, Alert, Row, Col } from 'antd';
 import { BugOutlined, PlayCircleOutlined, WarningOutlined, InfoCircleOutlined } from '@ant-design/icons';
 import AnalyticsSDK from '@/sdk';
+import useGlobalStore from '@/store/globalStore';
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -23,10 +24,14 @@ const cardStyle: React.CSSProperties = {
 const SDKModule: React.FC = () => {
   const [eventLog, setEventLog] = useState<string[]>([]);
   const [sdk, setSdk] = useState<AnalyticsSDK | null>(null);
+  const selectedProjectId = useGlobalStore(state => state.selectedProjectId);
 
   useEffect(() => {
+    // 清理之前的SDK实例
+    AnalyticsSDK.clearAllInstances();
+    
     const sdkInstance = AnalyticsSDK.getInstance(
-      'demo-project',
+      selectedProjectId,
       (import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api') + '/track'
     );
     sdkInstance.setUser('user-123');
@@ -35,11 +40,12 @@ const SDKModule: React.FC = () => {
     // 页面浏览事件
     sdkInstance.track('页面浏览', { 
       路径: location.pathname,
-      模块: 'SDK模块演示'
+      模块: 'SDK模块演示',
+      项目ID: selectedProjectId
     });
     
-    addToLog('页面浏览事件已发送');
-  }, []);
+    addToLog(`页面浏览事件已发送 (项目: ${selectedProjectId})`);
+  }, [selectedProjectId]);
 
   const addToLog = (message: string) => {
     const timestamp = new Date().toLocaleTimeString();

@@ -6,6 +6,7 @@ import dayjs from 'dayjs';
 import { apiService } from '@/services/api';
 import type { TopProject } from '@/services/api';
 import FloatingPanel from '@/components/FloatingPanel';
+import useGlobalStore from '@/store/globalStore';
 
 const { RangePicker } = DatePicker;
 
@@ -24,19 +25,20 @@ const Dashboard: React.FC = () => {
   });
   const [topProjects, setTopProjects] = useState<TopProject[]>([]);
   const [showHelp, setShowHelp] = useState(false);
+  const selectedProjectId = useGlobalStore(state => state.selectedProjectId);
 
   const fetchData = async () => {
     try {
       setLoading(true);
       const [stats, overviewData, topProjectsData] = await Promise.all([
         apiService.getStats({
-          projectId: 'demo-project',
+          projectId: selectedProjectId,
           startDate: dateRange[0].format('YYYY-MM-DD'),
           endDate: dateRange[1].format('YYYY-MM-DD')
         }),
-        apiService.getDashboardOverview('demo-project'),
+        apiService.getDashboardOverview(selectedProjectId),
         apiService.getTopProjects({
-          projectId: 'demo-project',
+          projectId: selectedProjectId,
           startDate: dateRange[0].format('YYYY-MM-DD'),
           endDate: dateRange[1].format('YYYY-MM-DD')
         })
@@ -54,7 +56,7 @@ const Dashboard: React.FC = () => {
 
   useEffect(() => {
     fetchData();
-  }, [dateRange]);
+  }, [dateRange, selectedProjectId]);
 
   const lineConfig = {
     data: statsData.map(item => [

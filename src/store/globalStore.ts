@@ -23,6 +23,8 @@ interface GlobalState {
     componentSize: 'small' | 'middle' | 'large'
   }
   setSiteSettings: (settings: Partial<GlobalState['siteSettings']>) => void
+  selectedProjectId: string
+  setSelectedProjectId: (projectId: string) => void
 }
 
 // 从localStorage获取初始用户信息
@@ -35,6 +37,12 @@ const getInitialUserInfo = (): UserInfo | null => {
 const getInitialThemeMode = (): 'light' | 'dark' => {
   const storedTheme = localStorage.getItem('themeMode');
   return storedTheme === 'dark' ? 'dark' : 'light';
+};
+
+// 从localStorage获取初始项目ID
+const getInitialProjectId = (): string => {
+  const storedProjectId = localStorage.getItem('selectedProjectId');
+  return storedProjectId || 'demo-project';
 };
 
 const getInitialSiteSettings = () => {
@@ -85,6 +93,11 @@ const useGlobalStore = create<GlobalState>(set => ({
       localStorage.setItem('siteSettings', JSON.stringify(next));
       return { siteSettings: next } as Partial<GlobalState>;
     });
+  },
+  selectedProjectId: getInitialProjectId(),
+  setSelectedProjectId: (projectId) => {
+    localStorage.setItem('selectedProjectId', projectId);
+    set({ selectedProjectId: projectId });
   }
 }))
 export default useGlobalStore
