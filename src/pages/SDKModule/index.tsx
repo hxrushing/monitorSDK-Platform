@@ -30,6 +30,9 @@ const SDKModule: React.FC = () => {
     // 清理之前的SDK实例
     AnalyticsSDK.clearAllInstances();
     
+    // 清空事件日志
+    setEventLog([]);
+    
     const sdkInstance = AnalyticsSDK.getInstance(
       selectedProjectId,
       (import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api') + '/track'

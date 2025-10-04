@@ -30,6 +30,16 @@ const Dashboard: React.FC = () => {
   const fetchData = async () => {
     try {
       setLoading(true);
+      // 清空旧数据
+      setStatsData([]);
+      setOverview({
+        todayPV: 0,
+        todayUV: 0,
+        avgPages: 0,
+        avgDuration: 0
+      });
+      setTopProjects([]);
+      
       const [stats, overviewData, topProjectsData] = await Promise.all([
         apiService.getStats({
           projectId: selectedProjectId,

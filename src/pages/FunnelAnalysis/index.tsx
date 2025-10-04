@@ -41,6 +41,9 @@ const FunnelAnalysis: React.FC = () => {
 
     try {
       setLoading(true);
+      // 清空旧数据
+      setFunnelData([]);
+      
       const data = await apiService.getFunnelAnalysis({
         projectId: selectedProjectId,
         startDate: dateRange[0].format('YYYY-MM-DD'),
@@ -59,6 +62,13 @@ const FunnelAnalysis: React.FC = () => {
   useEffect(() => {
     fetchEventDefinitions();
   }, [selectedProjectId]);
+
+  // 当项目切换时，自动刷新漏斗数据
+  useEffect(() => {
+    if (selectedStages.length > 0) {
+      fetchFunnelData();
+    }
+  }, [selectedProjectId, selectedStages]);
 
   const handleSearch = () => {
     fetchFunnelData();

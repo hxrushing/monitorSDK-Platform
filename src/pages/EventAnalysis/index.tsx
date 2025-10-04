@@ -40,6 +40,9 @@ const EventAnalysis: React.FC = () => {
 
     try {
       setLoading(true);
+      // 清空旧数据
+      setAnalysisData([]);
+      
       const data = await apiService.getEventAnalysis({
         projectId: selectedProjectId,
         startDate: dateRange[0].format('YYYY-MM-DD'),
@@ -58,6 +61,13 @@ const EventAnalysis: React.FC = () => {
   useEffect(() => {
     fetchEventDefinitions();
   }, [selectedProjectId]);
+
+  // 当项目切换时，自动刷新分析数据
+  useEffect(() => {
+    if (selectedEvents.length > 0) {
+      fetchAnalysisData();
+    }
+  }, [selectedProjectId, selectedEvents]);
 
   const handleSearch = () => {
     fetchAnalysisData();

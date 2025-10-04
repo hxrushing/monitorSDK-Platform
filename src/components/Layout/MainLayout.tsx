@@ -194,6 +194,15 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
     navigate(key);
   };
 
+  // 处理项目切换
+  const handleProjectChange = (projectId: string) => {
+    const project = projects.find(p => p.id === projectId);
+    if (project) {
+      setSelectedProjectId(projectId);
+      message.success(`已切换到项目: ${project.name}`);
+    }
+  };
+
   // 根据当前路径，自动展开所属分组
   useEffect(() => {
     const groupKey = PATH_TO_GROUP_KEY[location.pathname];
@@ -330,7 +339,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
               <Select
                 value={selectedProjectId}
                 style={{ width: 200 }}
-                onChange={setSelectedProjectId}
+                onChange={handleProjectChange}
               >
                 {projects.map(project => (
                   <Option key={project.id} value={project.id}>
