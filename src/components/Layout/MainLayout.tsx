@@ -6,9 +6,15 @@ import {
   SettingOutlined,
   LineChartOutlined,
   ApartmentOutlined,
-  UserOutlined
+  UserOutlined,
+  QuestionCircleOutlined,
+  BookOutlined,
+  BugOutlined,
+  CodeOutlined,
+  BellOutlined,
+  MessageOutlined
 } from '@ant-design/icons';
-import { Layout, Menu, Button, theme, Select, Modal, Form, Input, message, Dropdown, Space, Switch, Tooltip } from 'antd';
+import { Layout, Menu, Button, theme, Select, Modal, Form, Input, message, Dropdown, Space, Switch, Tooltip, Badge, Drawer, Typography, Divider } from 'antd';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useTheme } from '@/hooks/useTheme';
 import { apiService, Project } from '@/services/api';
@@ -18,6 +24,7 @@ import useGlobalStore from '@/store/globalStore';
 
 const { Header, Sider, Content } = Layout;
 const { Option } = Select;
+const { Title, Text, Paragraph } = Typography;
 
 interface MainLayoutProps {
   children: React.ReactNode;
@@ -42,6 +49,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   const [isDragging, setIsDragging] = useState(false);
   const userInfoRef = useRef<HTMLDivElement>(null);
   const logoRef = useRef<HTMLDivElement>(null);
+  const [helpDrawerVisible, setHelpDrawerVisible] = useState(false);
 
   useEffect(() => {
     console.log('当前用户信息:', userInfo);
@@ -70,6 +78,30 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   useEffect(() => {
     fetchProjects();
   }, []);
+
+  // 键盘快捷键监听
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // Ctrl/Cmd + B 切换侧边栏
+      if ((event.ctrlKey || event.metaKey) && event.key === 'b') {
+        event.preventDefault();
+        setCollapsed(!collapsed);
+      }
+      // Ctrl/Cmd + ? 打开帮助
+      if ((event.ctrlKey || event.metaKey) && event.key === '/') {
+        event.preventDefault();
+        setHelpDrawerVisible(true);
+      }
+      // Ctrl/Cmd + K 快速搜索（可以后续实现）
+      if ((event.ctrlKey || event.metaKey) && event.key === 'k') {
+        event.preventDefault();
+        message.info('快速搜索功能开发中...');
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [collapsed]);
 
   const isAdmin = (userInfo as any)?.role === 'Admin' || ((userInfo as any)?.username === 'admin');
 
@@ -141,12 +173,12 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
       children: [
         {
           key: '/app/sdk-demo',
-          icon: <SettingOutlined />,
+          icon: <CodeOutlined />,
           label: 'SDK 模板'
         },
         {
           key: '/app/sdk-module',
-          icon: <SettingOutlined />,
+          icon: <BugOutlined />,
           label: 'SDK 模块'
         }
       ]
@@ -272,7 +304,13 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
-      <Sider trigger={null} collapsible collapsed={collapsed} theme={themeMode === 'dark' ? 'dark' : 'light'}>
+      <Sider 
+        trigger={null} 
+        collapsible 
+        collapsed={collapsed} 
+        theme={themeMode === 'dark' ? 'dark' : 'light'}
+        style={{ position: 'relative' }}
+      >
         <div
           ref={logoRef}
           draggable
@@ -307,15 +345,117 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
             }}
           />
         </div>
-        <Menu
-          theme={themeMode === 'dark' ? 'dark' : 'light'}
-          mode="inline"
-          selectedKeys={[location.pathname]}
-          openKeys={openKeys}
-          onOpenChange={setOpenKeys}
-          items={menuItems as any}
-          onClick={handleMenuClick as any}
-        />
+        
+        {/* 菜单区域 - 设置底部边距为底部区域留出空间 */}
+        <div style={{ 
+          height: 'calc(100vh - 200px)', 
+          overflow: 'auto',
+          paddingBottom: '120px' // 为底部区域留出空间
+        }}>
+          <Menu
+            theme={themeMode === 'dark' ? 'dark' : 'light'}
+            mode="inline"
+            selectedKeys={[location.pathname]}
+            openKeys={openKeys}
+            onOpenChange={setOpenKeys}
+            items={menuItems as any}
+            onClick={handleMenuClick as any}
+            style={{ border: 'none' }}
+          />
+        </div>
+        
+        {/* 底部帮助和外链区域 */}
+        <div style={{ 
+          position: 'absolute', 
+          bottom: 0, 
+          left: 0, 
+          right: 0, 
+          padding: '16px',
+          borderTop: `1px solid ${themeMode === 'dark' ? '#303030' : '#f0f0f0'}`,
+          background: themeMode === 'dark' ? '#141414' : '#fafafa'
+        }}>
+          {/* 帮助按钮 */}
+          <Tooltip title="快捷键帮助 (Ctrl+/)">
+            <Button
+              type="text"
+              icon={<QuestionCircleOutlined />}
+              onClick={() => setHelpDrawerVisible(true)}
+              style={{ 
+                width: '100%', 
+                marginBottom: 8,
+                color: themeMode === 'dark' ? '#fff' : '#666'
+              }}
+            >
+              {!collapsed && '帮助'}
+            </Button>
+          </Tooltip>
+          
+          {/* 外链导航 */}
+          {!collapsed && (
+            <Space direction="vertical" size="small" style={{ width: '100%' }}>
+              <Button
+                type="text"
+                icon={<BookOutlined />}
+                size="small"
+                onClick={() => window.open('https://docs.example.com', '_blank')}
+                style={{ width: '100%', color: themeMode === 'dark' ? '#fff' : '#666' }}
+              >
+                官方文档
+              </Button>
+              <Button
+                type="text"
+                icon={<CodeOutlined />}
+                size="small"
+                onClick={() => window.open('https://github.com/example/sdk', '_blank')}
+                style={{ width: '100%', color: themeMode === 'dark' ? '#fff' : '#666' }}
+              >
+                SDK 集成
+              </Button>
+              <Button
+                type="text"
+                icon={<BugOutlined />}
+                size="small"
+                onClick={() => window.open('https://github.com/example/issues', '_blank')}
+                style={{ width: '100%', color: themeMode === 'dark' ? '#fff' : '#666' }}
+              >
+                问题反馈
+              </Button>
+            </Space>
+          )}
+          
+          {/* 折叠状态下的图标栏 */}
+          {collapsed && (
+            <Space direction="vertical" size="small" style={{ width: '100%' }}>
+              <Tooltip title="官方文档" placement="right">
+                <Button
+                  type="text"
+                  icon={<BookOutlined />}
+                  size="small"
+                  onClick={() => window.open('https://docs.example.com', '_blank')}
+                  style={{ width: '100%', color: themeMode === 'dark' ? '#fff' : '#666' }}
+                />
+              </Tooltip>
+              <Tooltip title="SDK 集成" placement="right">
+                <Button
+                  type="text"
+                  icon={<CodeOutlined />}
+                  size="small"
+                  onClick={() => window.open('https://github.com/example/sdk', '_blank')}
+                  style={{ width: '100%', color: themeMode === 'dark' ? '#fff' : '#666' }}
+                />
+              </Tooltip>
+              <Tooltip title="问题反馈" placement="right">
+                <Button
+                  type="text"
+                  icon={<BugOutlined />}
+                  size="small"
+                  onClick={() => window.open('https://github.com/example/issues', '_blank')}
+                  style={{ width: '100%', color: themeMode === 'dark' ? '#fff' : '#666' }}
+                />
+              </Tooltip>
+            </Space>
+          )}
+        </div>
       </Sider>
       <Layout>
         <Header style={{ padding: 0, background: colorBgContainer }}>
@@ -373,6 +513,91 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
           {children}
         </Content>
       </Layout>
+
+      {/* 帮助抽屉 */}
+      <Drawer
+        title="快捷键帮助与使用指南"
+        placement="right"
+        width={400}
+        open={helpDrawerVisible}
+        onClose={() => setHelpDrawerVisible(false)}
+      >
+        <div style={{ padding: '0 16px' }}>
+          <Title level={4}>键盘快捷键</Title>
+          <div style={{ marginBottom: 24 }}>
+            <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+              <div>
+                <Text strong>Ctrl + B</Text>
+                <Text type="secondary" style={{ marginLeft: 8 }}>切换侧边栏折叠状态</Text>
+              </div>
+              <div>
+                <Text strong>Ctrl + /</Text>
+                <Text type="secondary" style={{ marginLeft: 8 }}>打开帮助中心</Text>
+              </div>
+              <div>
+                <Text strong>Ctrl + K</Text>
+                <Text type="secondary" style={{ marginLeft: 8 }}>快速搜索（开发中）</Text>
+              </div>
+            </Space>
+          </div>
+
+          <Divider />
+
+          <Title level={4}>功能说明</Title>
+          <div style={{ marginBottom: 24 }}>
+            <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+              <div>
+                <Text strong>侧边栏折叠</Text>
+                <Paragraph style={{ margin: '4px 0 0 0', fontSize: '12px' }}>
+                  点击折叠按钮或使用 Ctrl+B 可以收起侧边栏为图标模式，鼠标悬停可查看完整菜单
+                </Paragraph>
+              </div>
+              <div>
+                <Text strong>徽章提示</Text>
+                <Paragraph style={{ margin: '4px 0 0 0', fontSize: '12px' }}>
+                  菜单项上的数字徽章显示待处理的任务或消息数量
+                </Paragraph>
+              </div>
+              <div>
+                <Text strong>外链导航</Text>
+                <Paragraph style={{ margin: '4px 0 0 0', fontSize: '12px' }}>
+                  侧边栏底部提供快速访问官方文档、SDK集成指南和问题反馈的链接
+                </Paragraph>
+              </div>
+            </Space>
+          </div>
+
+          <Divider />
+
+          <Title level={4}>快速链接</Title>
+          <Space direction="vertical" size="small" style={{ width: '100%' }}>
+            <Button
+              type="link"
+              icon={<BookOutlined />}
+              onClick={() => window.open('https://docs.example.com', '_blank')}
+              style={{ padding: 0, height: 'auto' }}
+            >
+              官方文档
+            </Button>
+            <Button
+              type="link"
+              icon={<CodeOutlined />}
+              onClick={() => window.open('https://github.com/example/sdk', '_blank')}
+              style={{ padding: 0, height: 'auto' }}
+            >
+              SDK 集成指南
+            </Button>
+            <Button
+              type="link"
+              icon={<BugOutlined />}
+              onClick={() => window.open('https://github.com/example/issues', '_blank')}
+              style={{ padding: 0, height: 'auto' }}
+            >
+              问题反馈与工单
+            </Button>
+          </Space>
+        </div>
+      </Drawer>
 
       <Modal
         title="创建新项目"

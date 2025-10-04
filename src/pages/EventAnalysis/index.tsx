@@ -1,6 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Row, Col, DatePicker, Select, Table, Button, Spin, message } from 'antd';
+import { Card, Row, Col, DatePicker, Select, Table, Button, Spin, message, Space, Badge } from 'antd';
 import { Line } from '@ant-design/plots';
+import { 
+  BarChartOutlined, 
+  CalendarOutlined, 
+  FilterOutlined, 
+  SearchOutlined,
+  LineChartOutlined,
+  TableOutlined,
+  ClockCircleOutlined,
+  UserOutlined,
+  NumberOutlined
+} from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { apiService } from '@/services/api';
 import type { EventDefinition } from '@/types';
@@ -75,7 +86,12 @@ const EventAnalysis: React.FC = () => {
 
   const columns = [
     {
-      title: '时间',
+      title: (
+        <Space>
+          <ClockCircleOutlined />
+          <span>时间</span>
+        </Space>
+      ),
       dataIndex: 'date',
       key: 'date',
       render: (text: string) => {
@@ -83,26 +99,46 @@ const EventAnalysis: React.FC = () => {
       }
     },
     {
-      title: '事件名称',
+      title: (
+        <Space>
+          <BarChartOutlined />
+          <span>事件名称</span>
+        </Space>
+      ),
       dataIndex: 'eventName',
       key: 'eventName',
       render: (text: string) => 
         eventOptions.find(e => e.eventName === text)?.description || text,
     },
     {
-      title: '触发次数',
+      title: (
+        <Space>
+          <NumberOutlined />
+          <span>触发次数</span>
+        </Space>
+      ),
       dataIndex: 'count',
       key: 'count',
       sorter: (a: any, b: any) => a.count - b.count,
     },
     {
-      title: '用户数',
+      title: (
+        <Space>
+          <UserOutlined />
+          <span>用户数</span>
+        </Space>
+      ),
       dataIndex: 'users',
       key: 'users',
       sorter: (a: any, b: any) => a.users - b.users,
     },
     {
-      title: '人均触发',
+      title: (
+        <Space>
+          <NumberOutlined />
+          <span>人均触发</span>
+        </Space>
+      ),
       dataIndex: 'avgPerUser',
       key: 'avgPerUser',
       render: (text: number) => text.toFixed(2),
@@ -134,35 +170,61 @@ const EventAnalysis: React.FC = () => {
         <Card>
           <Row gutter={[16, 16]} align="middle">
             <Col>
-              <RangePicker
-                value={dateRange}
-                onChange={(dates) => dates && setDateRange(dates as [dayjs.Dayjs, dayjs.Dayjs])}
-              />
+              <Space>
+                <CalendarOutlined style={{ color: '#1890ff' }} />
+                <RangePicker
+                  value={dateRange}
+                  onChange={(dates) => dates && setDateRange(dates as [dayjs.Dayjs, dayjs.Dayjs])}
+                />
+              </Space>
             </Col>
             <Col flex="auto">
-              <Select
-                mode="multiple"
-                style={{ width: '100%' }}
-                placeholder="选择要分析的事件"
-                options={eventOptions.map(event => ({
-                  label: event.description,
-                  value: event.eventName
-                }))}
-                value={selectedEvents}
-                onChange={setSelectedEvents}
-              />
+              <Space.Compact style={{ width: '100%' }}>
+                <FilterOutlined style={{ color: '#52c41a', marginRight: 8, marginTop: 8 }} />
+                <Select
+                  mode="multiple"
+                  style={{ width: '100%' }}
+                  placeholder="选择要分析的事件"
+                  options={eventOptions.map(event => ({
+                    label: event.description,
+                    value: event.eventName
+                  }))}
+                  value={selectedEvents}
+                  onChange={setSelectedEvents}
+                />
+              </Space.Compact>
             </Col>
             <Col>
-              <Button type="primary" onClick={handleSearch}>查询</Button>
+              <Button type="primary" icon={<SearchOutlined />} onClick={handleSearch}>
+                查询
+              </Button>
             </Col>
           </Row>
         </Card>
 
-        <Card title="事件趋势" style={{ marginTop: 16 }}>
+        <Card 
+          title={
+            <Space>
+              <LineChartOutlined style={{ color: '#1890ff' }} />
+              <span>事件趋势</span>
+              <Badge count={selectedEvents.length} style={{ backgroundColor: '#52c41a' }} />
+            </Space>
+          } 
+          style={{ marginTop: 16 }}
+        >
           <Line {...lineConfig} />
         </Card>
 
-        <Card title="事件明细" style={{ marginTop: 16 }}>
+        <Card 
+          title={
+            <Space>
+              <TableOutlined style={{ color: '#722ed1' }} />
+              <span>事件明细</span>
+              <Badge count={analysisData.length} style={{ backgroundColor: '#fa8c16' }} />
+            </Space>
+          } 
+          style={{ marginTop: 16 }}
+        >
           <Table columns={columns} dataSource={analysisData} />
         </Card>
       </div>

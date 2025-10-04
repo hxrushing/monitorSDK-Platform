@@ -10,13 +10,20 @@ import {
   Popconfirm,
   Card,
   Tag,
-  Tooltip
+  Tooltip,
+  Badge
 } from 'antd';
 import {
   PlusOutlined,
   EditOutlined,
   DeleteOutlined,
-  ExclamationCircleOutlined
+  ExclamationCircleOutlined,
+  SettingOutlined,
+  FileTextOutlined,
+  TagsOutlined,
+  ToolOutlined,
+  InfoCircleOutlined,
+  CodeOutlined
 } from '@ant-design/icons';
 import { apiService } from '@/services/api';
 import type { EventDefinition } from '@/types';
@@ -120,7 +127,12 @@ const EventManagement: React.FC = () => {
 
   const columns = [
     {
-      title: '事件名称',
+      title: (
+        <Space>
+          <CodeOutlined />
+          <span>事件名称</span>
+        </Space>
+      ),
       dataIndex: 'eventName',
       key: 'eventName',
       width: 200,
@@ -131,7 +143,12 @@ const EventManagement: React.FC = () => {
       ),
     },
     {
-      title: '描述',
+      title: (
+        <Space>
+          <FileTextOutlined />
+          <span>描述</span>
+        </Space>
+      ),
       dataIndex: 'description',
       key: 'description',
       render: (text: string) => (
@@ -141,7 +158,12 @@ const EventManagement: React.FC = () => {
       ),
     },
     {
-      title: '参数定义',
+      title: (
+        <Space>
+          <TagsOutlined />
+          <span>参数定义</span>
+        </Space>
+      ),
       dataIndex: 'paramsSchema',
       key: 'paramsSchema',
       width: 300,
@@ -156,7 +178,12 @@ const EventManagement: React.FC = () => {
       ),
     },
     {
-      title: '操作',
+      title: (
+        <Space>
+          <ToolOutlined />
+          <span>操作</span>
+        </Space>
+      ),
       key: 'action',
       width: 200,
       render: (_: any, record: EventDefinition) => (
@@ -200,7 +227,13 @@ const EventManagement: React.FC = () => {
   return (
     <div className="event-management">
       <Card
-        title="事件管理"
+        title={
+          <Space>
+            <SettingOutlined style={{ color: '#1890ff' }} />
+            <span>事件管理</span>
+            <Badge count={definitions.length} style={{ backgroundColor: '#52c41a' }} />
+          </Space>
+        }
         extra={
           <Button
             type="primary"
@@ -234,7 +267,12 @@ const EventManagement: React.FC = () => {
       </Card>
 
       <Modal
-        title={editingDefinition ? '编辑事件' : '新建事件'}
+        title={
+          <Space>
+            <InfoCircleOutlined style={{ color: '#1890ff' }} />
+            <span>{editingDefinition ? '编辑事件' : '新建事件'}</span>
+          </Space>
+        }
         open={isModalVisible}
         onOk={() => form.submit()}
         onCancel={() => {

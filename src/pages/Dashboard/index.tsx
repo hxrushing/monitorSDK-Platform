@@ -1,7 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Row, Col, DatePicker, Statistic, Spin, message, Table, Button, Space } from 'antd';
+import { Card, Row, Col, DatePicker, Statistic, Spin, message, Table, Button, Space, Badge } from 'antd';
 import { Line } from '@ant-design/plots';
-import { QuestionCircleOutlined } from '@ant-design/icons';
+import { 
+  QuestionCircleOutlined, 
+  DashboardOutlined, 
+  EyeOutlined, 
+  UserOutlined, 
+  FileTextOutlined, 
+  ClockCircleOutlined,
+  LineChartOutlined,
+  TrophyOutlined
+} from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { apiService } from '@/services/api';
 import type { TopProject } from '@/services/api';
@@ -113,6 +122,10 @@ const Dashboard: React.FC = () => {
             title="实时数据概览"
             defaultPosition={{ x: window.innerWidth - 320, y: 20 }}
             width={300}
+            icon={<QuestionCircleOutlined />}
+            onClose={() => setShowHelp(false)}
+            collapsible={true}
+            defaultCollapsed={false}
           >
             <div>
               <p>📊 <strong>今日实时数据</strong></p>
@@ -166,50 +179,92 @@ const Dashboard: React.FC = () => {
           <Col span={6}>
             <Card>
               <Statistic
-                title="今日PV"
+                title={
+                  <Space>
+                    <EyeOutlined style={{ color: '#1890ff' }} />
+                    <span>今日PV</span>
+                    <Badge count={overview.todayPV > 1000 ? 'HOT' : 0} style={{ backgroundColor: '#52c41a' }} />
+                  </Space>
+                }
                 value={overview.todayPV}
                 suffix="次"
+                valueStyle={{ color: '#1890ff' }}
               />
             </Card>
           </Col>
           <Col span={6}>
             <Card>
               <Statistic
-                title="今日UV"
+                title={
+                  <Space>
+                    <UserOutlined style={{ color: '#52c41a' }} />
+                    <span>今日UV</span>
+                    <Badge count={overview.todayUV > 500 ? 'NEW' : 0} style={{ backgroundColor: '#fa8c16' }} />
+                  </Space>
+                }
                 value={overview.todayUV}
                 suffix="人"
+                valueStyle={{ color: '#52c41a' }}
               />
             </Card>
           </Col>
           <Col span={6}>
             <Card>
               <Statistic
-                title="人均访问页面"
+                title={
+                  <Space>
+                    <FileTextOutlined style={{ color: '#722ed1' }} />
+                    <span>人均访问页面</span>
+                  </Space>
+                }
                 value={overview.avgPages}
                 precision={2}
                 suffix="页"
+                valueStyle={{ color: '#722ed1' }}
               />
             </Card>
           </Col>
           <Col span={6}>
             <Card>
               <Statistic
-                title="平均停留时间"
+                title={
+                  <Space>
+                    <ClockCircleOutlined style={{ color: '#fa8c16' }} />
+                    <span>平均停留时间</span>
+                  </Space>
+                }
                 value={overview.avgDuration}
                 precision={1}
                 suffix="分钟"
+                valueStyle={{ color: '#fa8c16' }}
               />
             </Card>
           </Col>
         </Row>
 
-        <Card title="访问趋势" style={{ marginTop: 16 }}>
+        <Card 
+          title={
+            <Space>
+              <LineChartOutlined style={{ color: '#1890ff' }} />
+              <span>访问趋势</span>
+            </Space>
+          } 
+          style={{ marginTop: 16 }}
+        >
           <Line {...lineConfig} />
         </Card>
 
         <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
           <Col span={24}>
-            <Card title="Top 5 访问项目">
+            <Card 
+              title={
+                <Space>
+                  <TrophyOutlined style={{ color: '#fa8c16' }} />
+                  <span>Top 5 访问项目</span>
+                  <Badge count={topProjects.length} style={{ backgroundColor: '#52c41a' }} />
+                </Space>
+              }
+            >
               <Table
                 dataSource={topProjects}
                 columns={topProjectsColumns}

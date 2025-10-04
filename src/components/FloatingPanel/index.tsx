@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Card } from 'antd';
-import { DragOutlined } from '@ant-design/icons';
+import { Card, Button, Tooltip } from 'antd';
+import { DragOutlined, MinusOutlined, PlusOutlined, CloseOutlined } from '@ant-design/icons';
 import './index.less';
 
 interface FloatingPanelProps {
@@ -9,6 +9,10 @@ interface FloatingPanelProps {
   defaultPosition?: { x: number; y: number };
   width?: number;
   className?: string;
+  icon?: React.ReactNode;
+  onClose?: () => void;
+  collapsible?: boolean;
+  defaultCollapsed?: boolean;
 }
 
 const FloatingPanel: React.FC<FloatingPanelProps> = ({
@@ -17,10 +21,15 @@ const FloatingPanel: React.FC<FloatingPanelProps> = ({
   defaultPosition = { x: 20, y: 20 },
   width = 300,
   className = '',
+  icon,
+  onClose,
+  collapsible = true,
+  defaultCollapsed = false,
 }) => {
   const [position, setPosition] = useState(defaultPosition);
   const [isDragging, setIsDragging] = useState(false);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const [collapsed, setCollapsed] = useState(defaultCollapsed);
   const panelRef = useRef<HTMLDivElement>(null);
 
   const handleMouseDown = (e: React.MouseEvent) => {
@@ -68,6 +77,47 @@ const FloatingPanel: React.FC<FloatingPanelProps> = ({
     };
   }, [isDragging, dragOffset]);
 
+  // 如果收起状态，显示图标栏
+  if (collapsed) {
+    return (
+      <div
+        ref={panelRef}
+        className={`floating-panel floating-panel-collapsed ${className}`}
+        style={{
+          position: 'fixed',
+          left: position.x,
+          top: position.y,
+          zIndex: 1000,
+        }}
+        onMouseDown={handleMouseDown}
+      >
+        <Tooltip title={title} placement="right">
+          <div className="floating-panel-icon-bar">
+            {icon || <DragOutlined />}
+            <div className="floating-panel-actions">
+              <Button
+                type="text"
+                size="small"
+                icon={<PlusOutlined />}
+                onClick={() => setCollapsed(false)}
+                className="floating-panel-action-btn"
+              />
+              {onClose && (
+                <Button
+                  type="text"
+                  size="small"
+                  icon={<CloseOutlined />}
+                  onClick={onClose}
+                  className="floating-panel-action-btn"
+                />
+              )}
+            </div>
+          </div>
+        </Tooltip>
+      </div>
+    );
+  }
+
   return (
     <div
       ref={panelRef}
@@ -87,6 +137,26 @@ const FloatingPanel: React.FC<FloatingPanelProps> = ({
           <div className="floating-panel-header">
             <DragOutlined style={{ marginRight: 8 }} />
             {title}
+            <div className="floating-panel-header-actions">
+              {collapsible && (
+                <Button
+                  type="text"
+                  size="small"
+                  icon={<MinusOutlined />}
+                  onClick={() => setCollapsed(true)}
+                  className="floating-panel-action-btn"
+                />
+              )}
+              {onClose && (
+                <Button
+                  type="text"
+                  size="small"
+                  icon={<CloseOutlined />}
+                  onClick={onClose}
+                  className="floating-panel-action-btn"
+                />
+              )}
+            </div>
           </div>
         }
       >
