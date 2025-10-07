@@ -1,5 +1,5 @@
 // src/router/index.tsx
-import { createBrowserRouter } from 'react-router-dom';
+import { createBrowserRouter, Navigate } from 'react-router-dom';
 import Dashboard from '@/pages/Dashboard';
 import EventAnalysis from '@/pages/EventAnalysis';
 import FunnelAnalysis from '@/pages/FunnelAnalysis';
@@ -12,6 +12,15 @@ import SDKModule from '@/pages/SDKModule';
 import MemberManagement from '@/pages/MemberManagement';
 import SystemSettings from '@/pages/SystemSettings';
 
+const isAuthed = () => !!localStorage.getItem('token') || !!localStorage.getItem('userInfo');
+
+const Protected = ({ children }: { children: JSX.Element }) => {
+  if (!isAuthed()) {
+    return <Navigate to="/login" replace />;
+  }
+  return children;
+};
+
 const router = createBrowserRouter([
   {
     path: '/',
@@ -23,7 +32,11 @@ const router = createBrowserRouter([
   },
   {
     path: '/app',
-    element: <App />,
+    element: (
+      <Protected>
+        <App />
+      </Protected>
+    ),
     children: [
       {
         path: 'dashboard',

@@ -1,10 +1,7 @@
-import axios from 'axios';
+import http from '@/utils/http';
 import type { EventDefinition } from '@/types';
 
-const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api',
-  timeout: 10000,
-});
+const api = http;
 
 export interface UserItem {
   id: string;
@@ -68,14 +65,14 @@ export interface TopProject {
 export const apiService = {
   // 获取统计数据
   async getStats(params: StatsQuery): Promise<StatsData[]> {
-    const { data } = await api.get('/stats', { params });
+    const data = await api.get('/stats', { params });
     return data.data;
   },
 
   // 获取事件列表
   async getEventDefinitions(projectId: string): Promise<EventDefinition[]> {
     try {
-      const { data } = await api.get('/event-definitions', {
+      const data = await api.get('/event-definitions', {
         params: { projectId }
       });
       return data.data;
@@ -87,13 +84,13 @@ export const apiService = {
 
   // 创建事件定义
   async createEventDefinition(eventDef: Omit<EventDefinition, 'id'>): Promise<EventDefinition> {
-    const { data } = await api.post('/event-definitions', eventDef);
+    const data = await api.post('/event-definitions', eventDef);
     return data.data;
   },
 
   // 更新事件定义
   async updateEventDefinition(id: string, eventDef: Omit<EventDefinition, 'id'>): Promise<EventDefinition> {
-    const { data } = await api.put(`/event-definitions/${id}`, eventDef);
+    const data = await api.put(`/event-definitions/${id}`, eventDef);
     return data.data;
   },
 
@@ -108,7 +105,7 @@ export const apiService = {
   async getEventAnalysis(params: EventAnalysisQuery): Promise<EventAnalysisData[]> {
     try {
       console.log('发送事件分析请求:', params);
-      const { data } = await api.get('/events/analysis', {
+      const data = await api.get('/events/analysis', {
         params: {
           ...params,
           events: params.events.join(',') // 将数组转换为逗号分隔的字符串
@@ -125,7 +122,7 @@ export const apiService = {
   async getFunnelAnalysis(params: FunnelQuery): Promise<FunnelData[]> {
     try {
       console.log('发送漏斗分析请求:', params);
-      const { data } = await api.get('/funnel/analysis', {
+      const data = await api.get('/funnel/analysis', {
         params: {
           ...params,
           stages: params.stages.join(',') // 将数组转换为逗号分隔的字符串
@@ -145,7 +142,7 @@ export const apiService = {
     avgPages: number;
     avgDuration: number;
   }> {
-    const { data } = await api.get('/dashboard/overview', {
+    const data = await api.get('/dashboard/overview', {
       params: { projectId }
     });
     return data.data;
@@ -153,13 +150,13 @@ export const apiService = {
 
   // 创建项目
   async createProject(project: Omit<Project, 'id'>): Promise<Project> {
-    const { data } = await api.post('/projects', project);
+    const data = await api.post('/projects', project);
     return data.data;
   },
 
   // 获取项目列表
   async getProjects(): Promise<Project[]> {
-    const { data } = await api.get('/projects');
+    const data = await api.get('/projects');
     return data.data;
   },
 
@@ -169,29 +166,29 @@ export const apiService = {
     startDate: string;
     endDate: string;
   }): Promise<TopProject[]> {
-    const { data } = await api.get('/top-projects', { params });
+    const data = await api.get('/top-projects', { params });
     return data.data;
   },
 
   // 用户列表与角色
   async getUsers(): Promise<UserItem[]> {
-    const { data } = await api.get('/users');
+    const data = await api.get('/users');
     return data.data;
+    // 用户注册
   },
 
   async updateUserRole(id: string, role: 'Admin' | 'User'): Promise<void> {
     await api.put(`/users/${id}/role`, { role });
   },
 
-  // 用户注册
   async register(credentials: { username: string; password: string; email: string }) {
-    const { data } = await api.post('/register', credentials);
+    const data = await api.post('/register', credentials);
     return data;
   },
 
   // 用户登录
   async login(credentials: { username: string; password: string }) {
-    const { data } = await api.post('/login', credentials);
+    const data = await api.post('/login', credentials);
     return data;
   }
 }; 

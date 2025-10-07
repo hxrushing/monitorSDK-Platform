@@ -1,4 +1,5 @@
 import express from 'express';
+import jwt, { Secret, SignOptions } from 'jsonwebtoken';
 import { StatsService } from '../services/statsService';
 import { EventDefinitionService, AppError } from '../services/eventDefinitionService';
 import { TrackingService } from '../services/trackingService';
@@ -13,7 +14,26 @@ export function createApiRouter(db: Connection) {
   const trackingService = new TrackingService(db);
   const userService = new UserService(db);
 
-  // 用户登录
+  const JWT_SECRET: Secret = process.env.JWT_SECRET || 'dev-secret';
+  const JWT_EXPIRES_IN: SignOptions['expiresIn'] = (process.env.JWT_EXPIRES_IN as any) || '7d';
+
+  // 简单鉴权中间件：校验 Bearer Token
+  const authMiddleware: express.RequestHandler = (req, res, next) => {
+    try {
+      const auth = req.headers.authorization || '';
+      const token = auth.startsWith('Bearer ') ? auth.slice(7) : '';
+      if (!token) {
+        return res.status(401).json({ success: false, error: 'Unauthorized' });
+      }
+      const payload = jwt.verify(token, JWT_SECRET) as { sub: string; username: string; role: string };
+      (req as any).user = payload;
+      next();
+    } catch (e) {
+      return res.status(401).json({ success: false, error: 'Unauthorized' });
+    }
+  };
+
+  // 用户登录（公开）
   router.post('/login', async (req, res) => {
     try {
       const { username, password } = req.body;
@@ -26,6 +46,12 @@ export function createApiRouter(db: Connection) {
       }
 
       const result = await userService.login(username, password);
+      if (result.success && result.user) {
+        const payload = { sub: result.user.id, username: result.user.username, role: result.user.role };
+        const signOptions: SignOptions = { expiresIn: JWT_EXPIRES_IN };
+        const token = jwt.sign(payload, JWT_SECRET, signOptions);
+        return res.json({ ...result, token });
+      }
       res.json(result);
     } catch (error) {
       console.error('登录失败:', error);
@@ -36,7 +62,7 @@ export function createApiRouter(db: Connection) {
     }
   });
 
-  // 用户注册
+  // 用户注册（公开）
   router.post('/register', async (req, res) => {
     try {
       const { username, password, email } = req.body;
@@ -58,6 +84,9 @@ export function createApiRouter(db: Connection) {
       });
     }
   });
+
+  // 从这里开始的路由均需要鉴权
+  router.use(authMiddleware);
 
   // 获取用户列表
   router.get('/users', async (req, res) => {

@@ -10,7 +10,7 @@ const instance = axios.create({
 instance.interceptors.request.use(config => {
   const token = localStorage.getItem('token')
   if (token) {
-    config.headers.Authorization = `Bearer ${token}`
+    (config.headers = config.headers || {}).Authorization = `Bearer ${token}`
   }
   return config
 })
@@ -19,6 +19,15 @@ instance.interceptors.request.use(config => {
 instance.interceptors.response.use(
   response => response.data,
   error => {
+    const status = error?.response?.status
+    if (status === 401) {
+      // 全局未授权处理：清除本地会话并跳转登录
+      localStorage.removeItem('token')
+      localStorage.removeItem('userInfo')
+      if (window.location.pathname !== '/login') {
+        window.location.href = '/login'
+      }
+    }
     console.error('API Error:', error)
     return Promise.reject(error)
   }

@@ -17,6 +17,9 @@ const Login: React.FC = () => {
       const response = await apiService.login(values);
       
       if (response.success && response.user) {
+        if (response.token) {
+          localStorage.setItem('token', response.token);
+        }
         setUserInfo(response.user);
         message.success('登录成功');
         navigate('/app/dashboard');
