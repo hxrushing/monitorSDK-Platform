@@ -11,7 +11,6 @@ interface UserInfo {
 
 interface GlobalState {
   userInfo: UserInfo | null;
-  trackingConfig: { projectId: string }
   setUserInfo: (userInfo: UserInfo | null) => void
   themeMode: 'light' | 'dark'
   setThemeMode: (mode: 'light' | 'dark') => void
@@ -72,7 +71,6 @@ const getInitialSiteSettings = () => {
 
 const useGlobalStore = create<GlobalState>(set => ({
   userInfo: getInitialUserInfo(),
-  trackingConfig: { projectId: 'default-project' },
   setUserInfo: (userInfo) => {
     if (userInfo) {
       localStorage.setItem('userInfo', JSON.stringify(userInfo));
