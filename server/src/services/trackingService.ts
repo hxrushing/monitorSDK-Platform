@@ -18,6 +18,82 @@ interface EventData {
 export class TrackingService {
   constructor(private db: Connection) {}
 
+  // 批量处理事件
+  async trackBatchEvents(batchData: {
+    projectId: string;
+    events: EventData[];
+    batchSize: number;
+    timestamp: number;
+    uid?: string;
+    deviceInfo: any;
+    sdkVersion: string;
+  }): Promise<{ success: boolean; processedCount: number; failedEvents?: any[] }> {
+    try {
+      console.log(`开始处理批量事件，数量: ${batchData.events.length}`);
+
+      const failedEvents: any[] = [];
+      let processedCount = 0;
+
+      // 使用事务处理批量插入
+      await this.db.beginTransaction();
+
+      try {
+        for (const eventData of batchData.events) {
+          try {
+            // 检查事件定义是否存在
+            const exists = await this.validateEventDefinition(batchData.projectId, eventData.eventName);
+            
+            if (!exists) {
+              await this.createEventDefinition(batchData.projectId, eventData.eventName);
+            }
+
+            // 准备插入数据
+            const params = [
+              batchData.projectId,
+              eventData.eventName,
+              JSON.stringify(eventData.eventParams || {}),
+              batchData.uid || null,
+              JSON.stringify(batchData.deviceInfo || {}),
+              new Date(eventData.timestamp || Date.now()).toISOString().slice(0, 19).replace('T', ' ')
+            ];
+
+            // 插入事件数据
+            await this.db.execute(
+              'INSERT INTO events (project_id, event_name, event_params, user_id, device_info, timestamp) VALUES (?, ?, ?, ?, ?, ?)',
+              params
+            );
+
+            processedCount++;
+          } catch (error) {
+            console.error(`处理单个事件失败:`, error);
+            failedEvents.push(eventData);
+          }
+        }
+
+        // 提交事务
+        await this.db.commit();
+        console.log(`批量事件处理完成，成功: ${processedCount}, 失败: ${failedEvents.length}`);
+
+        return {
+          success: true,
+          processedCount,
+          failedEvents: failedEvents.length > 0 ? failedEvents : undefined
+        };
+      } catch (error) {
+        // 回滚事务
+        await this.db.rollback();
+        throw error;
+      }
+    } catch (err: any) {
+      console.error('批量事件处理失败:', err);
+      return {
+        success: false,
+        processedCount: 0,
+        failedEvents: batchData.events
+      };
+    }
+  }
+
   async trackEvent(eventData: EventData): Promise<void> {
     try {
       console.log('开始处理事件追踪:', eventData);

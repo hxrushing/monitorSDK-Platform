@@ -89,8 +89,17 @@ export function createApiRouter(db: Connection) {
   router.post('/track', async (req, res) => {
     try {
       const eventData = req.body;
-      await trackingService.trackEvent(eventData);
-      res.status(200).json({ success: true });
+      
+      // 检查是否是批量事件
+      if (eventData.events && Array.isArray(eventData.events)) {
+        // 批量事件处理
+        const result = await trackingService.trackBatchEvents(eventData);
+        res.status(200).json(result);
+      } else {
+        // 单个事件处理（向后兼容）
+        await trackingService.trackEvent(eventData);
+        res.status(200).json({ success: true });
+      }
     } catch (error) {
       console.error('Error tracking event:', error);
       res.status(500).json({ success: false, error: 'Internal Server Error' });
