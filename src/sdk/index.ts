@@ -103,15 +103,6 @@ class AnalyticsSDK {
     });
   }
 
-  // 专门用于性能事件的方法
-  public trackPerformance(metric: string, value: number, unit: string = 'ms') {
-    this.track('performance', {
-      性能指标: metric,
-      数值: value,
-      单位: unit,
-      测量时间: new Date().toISOString()
-    });
-  }
 
   private async send(data: any) {
     try {

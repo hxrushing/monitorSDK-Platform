@@ -131,15 +131,6 @@ const SDKModule: React.FC = () => {
       });
   };
 
-  // 性能监控演示
-  const simulatePerformanceEvent = () => {
-    if (sdk) {
-      const loadTime = Math.random() * 2000 + 500; // 模拟页面加载时间
-      sdk.trackPerformance('页面加载时间', loadTime, 'ms');
-      addToLog(`性能事件: 页面加载时间 - ${loadTime.toFixed(2)}ms`);
-      message.info(`已发送性能事件: 页面加载时间 ${loadTime.toFixed(2)}ms`);
-    }
-  };
 
   return (
     <div style={containerStyle}>
@@ -218,12 +209,6 @@ const SDKModule: React.FC = () => {
                     提交反馈
                   </Button>
                   
-                  <Button 
-                    type="dashed"
-                    onClick={() => simulatePerformanceEvent()}
-                  >
-                    性能监控
-                  </Button>
                 </Space>
               </Space>
             </Card>
