@@ -389,72 +389,6 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
               {!collapsed && '帮助'}
             </Button>
           </Tooltip>
-          
-          {/* 外链导航 */}
-          {!collapsed && (
-            <Space direction="vertical" size="small" style={{ width: '100%' }}>
-              <Button
-                type="text"
-                icon={<BookOutlined />}
-                size="small"
-                onClick={() => window.open('https://docs.example.com', '_blank')}
-                style={{ width: '100%', color: themeMode === 'dark' ? '#fff' : '#666' }}
-              >
-                官方文档
-              </Button>
-              <Button
-                type="text"
-                icon={<CodeOutlined />}
-                size="small"
-                onClick={() => window.open('https://github.com/example/sdk', '_blank')}
-                style={{ width: '100%', color: themeMode === 'dark' ? '#fff' : '#666' }}
-              >
-                SDK 集成
-              </Button>
-              <Button
-                type="text"
-                icon={<BugOutlined />}
-                size="small"
-                onClick={() => window.open('https://github.com/example/issues', '_blank')}
-                style={{ width: '100%', color: themeMode === 'dark' ? '#fff' : '#666' }}
-              >
-                问题反馈
-              </Button>
-            </Space>
-          )}
-          
-          {/* 折叠状态下的图标栏 */}
-          {collapsed && (
-            <Space direction="vertical" size="small" style={{ width: '100%' }}>
-              <Tooltip title="官方文档" placement="right">
-                <Button
-                  type="text"
-                  icon={<BookOutlined />}
-                  size="small"
-                  onClick={() => window.open('https://docs.example.com', '_blank')}
-                  style={{ width: '100%', color: themeMode === 'dark' ? '#fff' : '#666' }}
-                />
-              </Tooltip>
-              <Tooltip title="SDK 集成" placement="right">
-                <Button
-                  type="text"
-                  icon={<CodeOutlined />}
-                  size="small"
-                  onClick={() => window.open('https://github.com/example/sdk', '_blank')}
-                  style={{ width: '100%', color: themeMode === 'dark' ? '#fff' : '#666' }}
-                />
-              </Tooltip>
-              <Tooltip title="问题反馈" placement="right">
-                <Button
-                  type="text"
-                  icon={<BugOutlined />}
-                  size="small"
-                  onClick={() => window.open('https://github.com/example/issues', '_blank')}
-                  style={{ width: '100%', color: themeMode === 'dark' ? '#fff' : '#666' }}
-                />
-              </Tooltip>
-            </Space>
-          )}
         </div>
       </Sider>
       <Layout>
@@ -558,44 +492,9 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
                   菜单项上的数字徽章显示待处理的任务或消息数量
                 </Paragraph>
               </div>
-              <div>
-                <Text strong>外链导航</Text>
-                <Paragraph style={{ margin: '4px 0 0 0', fontSize: '12px' }}>
-                  侧边栏底部提供快速访问官方文档、SDK集成指南和问题反馈的链接
-                </Paragraph>
-              </div>
             </Space>
           </div>
-
           <Divider />
-
-          <Title level={4}>快速链接</Title>
-          <Space direction="vertical" size="small" style={{ width: '100%' }}>
-            <Button
-              type="link"
-              icon={<BookOutlined />}
-              onClick={() => window.open('https://docs.example.com', '_blank')}
-              style={{ padding: 0, height: 'auto' }}
-            >
-              官方文档
-            </Button>
-            <Button
-              type="link"
-              icon={<CodeOutlined />}
-              onClick={() => window.open('https://github.com/example/sdk', '_blank')}
-              style={{ padding: 0, height: 'auto' }}
-            >
-              SDK 集成指南
-            </Button>
-            <Button
-              type="link"
-              icon={<BugOutlined />}
-              onClick={() => window.open('https://github.com/example/issues', '_blank')}
-              style={{ padding: 0, height: 'auto' }}
-            >
-              问题反馈与工单
-            </Button>
-          </Space>
         </div>
       </Drawer>
 

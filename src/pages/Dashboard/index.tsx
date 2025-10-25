@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense  } from 'react';
 import { Card, Row, Col, DatePicker, Statistic, Spin, message, Table, Button, Space, Badge } from 'antd';
-import { Line } from '@ant-design/plots';
+const Line = React.lazy(() => import('@ant-design/plots').then(m => ({ default: m.Line })));
 import { 
   QuestionCircleOutlined, 
   DashboardOutlined, 
@@ -251,7 +251,9 @@ const Dashboard: React.FC = () => {
           } 
           style={{ marginTop: 16 }}
         >
-          <Line {...lineConfig} />
+          <Suspense fallback={<div>图表加载中...</div>}>
+            <Line {...lineConfig} />
+          </Suspense>
         </Card>
 
         <Row gutter={[16, 16]} style={{ marginTop: 16 }}>

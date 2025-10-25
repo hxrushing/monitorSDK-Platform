@@ -1,16 +1,19 @@
 // src/router/index.tsx
+import React, { Suspense, lazy } from 'react';
 import { createBrowserRouter, Navigate } from 'react-router-dom';
-import Dashboard from '@/pages/Dashboard';
-import EventAnalysis from '@/pages/EventAnalysis';
-import FunnelAnalysis from '@/pages/FunnelAnalysis';
-import EventManagement from '@/pages/EventManagement';
-import Login from '@/pages/login';
-import Register from '@/pages/register';
-import App from '@/App';
-import SDKDemo from '@/pages/sdk-demo';
-import SDKModule from '@/pages/SDKModule';
-import MemberManagement from '@/pages/MemberManagement';
-import SystemSettings from '@/pages/SystemSettings';
+
+// 路由按需加载
+const Dashboard = lazy(() => import('@/pages/Dashboard'));
+const EventAnalysis = lazy(() => import('@/pages/EventAnalysis'));
+const FunnelAnalysis = lazy(() => import('@/pages/FunnelAnalysis'));
+const EventManagement = lazy(() => import('@/pages/EventManagement'));
+const Login = lazy(() => import('@/pages/login'));
+const Register = lazy(() => import('@/pages/register'));
+const App = lazy(() => import('@/App'));
+const SDKDemo = lazy(() => import('@/pages/sdk-demo'));
+const SDKModule = lazy(() => import('@/pages/SDKModule'));
+const MemberManagement = lazy(() => import('@/pages/MemberManagement'));
+const SystemSettings = lazy(() => import('@/pages/SystemSettings'));
 
 const isAuthed = () => !!localStorage.getItem('token') || !!localStorage.getItem('userInfo');
 
@@ -21,18 +24,22 @@ const Protected = ({ children }: { children: JSX.Element }) => {
   return children;
 };
 
+const withSuspense = (node: JSX.Element) => (
+  <Suspense fallback={<div>加载中...</div>}>{node}</Suspense>
+);
+
 const router = createBrowserRouter([
   {
     path: '/',
-    element: <Login />,
+    element: withSuspense(<Login />),
   },
   {
     path: '/login',
-    element: <Login />,
+    element: withSuspense(<Login />),
   },
   {
     path: '/app',
-    element: (
+    element: withSuspense(
       <Protected>
         <App />
       </Protected>
@@ -40,41 +47,41 @@ const router = createBrowserRouter([
     children: [
       {
         path: 'dashboard',
-        element: <Dashboard />,
+        element: withSuspense(<Dashboard />),
       },
       {
         path: 'events',
-        element: <EventAnalysis />,
+        element: withSuspense(<EventAnalysis />),
       },
       {
         path: 'funnel',
-        element: <FunnelAnalysis />,
+        element: withSuspense(<FunnelAnalysis />),
       },
       {
         path: 'event-management',
-        element: <EventManagement />,
+        element: withSuspense(<EventManagement />),
       },
       {
         path: 'member-management',
-        element: <MemberManagement />,
+        element: withSuspense(<MemberManagement />),
       },
       {
         path: 'sdk-demo',
-        element: <SDKDemo />,
+        element: withSuspense(<SDKDemo />),
       },
       {
         path: 'sdk-module',
-        element: <SDKModule />,
+        element: withSuspense(<SDKModule />),
       },
       {
         path: 'settings',
-        element: <SystemSettings />,
+        element: withSuspense(<SystemSettings />),
       },
     ],
   },
   {
     path: '/register',
-    element: <Register />,
+    element: withSuspense(<Register />),
   }
 ]);
 

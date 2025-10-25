@@ -85,6 +85,18 @@ export function createApiRouter(db: Connection) {
     }
   });
 
+  // 事件追踪接口（不需要认证，因为SDK可能没有token）
+  router.post('/track', async (req, res) => {
+    try {
+      const eventData = req.body;
+      await trackingService.trackEvent(eventData);
+      res.status(200).json({ success: true });
+    } catch (error) {
+      console.error('Error tracking event:', error);
+      res.status(500).json({ success: false, error: 'Internal Server Error' });
+    }
+  });
+
   // 从这里开始的路由均需要鉴权
   router.use(authMiddleware);
 
@@ -119,18 +131,6 @@ export function createApiRouter(db: Connection) {
       res.json({ success: true });
     } catch (error) {
       console.error('更新用户角色失败:', error);
-      res.status(500).json({ success: false, error: 'Internal Server Error' });
-    }
-  });
-
-  // 事件追踪接口
-  router.post('/track', async (req, res) => {
-    try {
-      const eventData = req.body;
-      await trackingService.trackEvent(eventData);
-      res.status(200).json({ success: true });
-    } catch (error) {
-      console.error('Error tracking event:', error);
       res.status(500).json({ success: false, error: 'Internal Server Error' });
     }
   });

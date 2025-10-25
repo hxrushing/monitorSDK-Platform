@@ -115,6 +115,9 @@ class AnalyticsSDK {
 
   private async send(data: any) {
     try {
+      console.log('SDK发送事件数据:', data);
+      console.log('发送到端点:', this.endpoint);
+      
       const response = await fetch(this.endpoint, {
         method: 'POST',
         headers: {
@@ -123,11 +126,25 @@ class AnalyticsSDK {
         body: JSON.stringify(data),
       });
 
+      console.log('响应状态:', response.status);
+      
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const errorText = await response.text();
+        console.error('服务器响应错误:', errorText);
+        throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
       }
+      
+      console.log('事件发送成功');
     } catch (error) {
       console.error('Analytics tracking failed:', error);
+      // 在开发环境下显示更详细的错误信息
+      if (import.meta.env.DEV) {
+        console.error('SDK发送失败详情:', {
+          endpoint: this.endpoint,
+          data: data,
+          error: error
+        });
+      }
     }
   }
 
