@@ -190,5 +190,26 @@ export const apiService = {
   async login(credentials: { username: string; password: string }) {
     const data = await api.post('/login', credentials);
     return data;
+  },
+
+  // AI总结设置
+  async getAISummarySettings() {
+    const data = await api.get('/ai-summary/settings');
+    return data.data;
+  },
+
+  async updateAISummarySettings(settings: {
+    enabled?: boolean;
+    sendTime?: string;
+    email?: string;
+    projectIds?: string[];
+  }) {
+    const data = await api.post('/ai-summary/settings', settings);
+    return data.data;
+  },
+
+  async sendAISummaryNow() {
+    const data = await api.post('/ai-summary/send-now');
+    return data;
   }
 }; 

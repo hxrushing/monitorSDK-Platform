@@ -7,6 +7,12 @@ export interface StatsQuery {
   eventName?: string;
 }
 
+export interface StatsData extends RowDataPacket {
+  date: string;
+  pv: number;
+  uv: number;
+}
+
 export interface EventAnalysisQuery extends StatsQuery {
   events: string[];
 }
@@ -64,7 +70,7 @@ export class StatsService {
       console.log('执行SQL查询:', sql);
       console.log('查询参数:', params);
 
-      const [rows] = await this.db.execute(sql, params);
+      const [rows] = await this.db.execute<StatsData[]>(sql, params);
       console.log('查询结果:', rows);
       return rows;
     } catch (err: any) {

@@ -4,7 +4,8 @@ import {
   DashboardOutlined,
   BarChartOutlined,
   FunnelPlotOutlined,
-  SettingOutlined
+  SettingOutlined,
+  RobotOutlined
 } from '@ant-design/icons'
 
 const { Sider } = Layout
@@ -41,6 +42,11 @@ const Sidebar = () => {
       key: '/event-management',
       icon: <SettingOutlined />,
       label: '事件定义'
+    },
+    {
+      key: '/ai-summary',
+      icon: <RobotOutlined />,
+      label: 'AI 智能总结'
     }
   ]
 

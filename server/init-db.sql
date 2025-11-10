@@ -83,6 +83,20 @@ ON DUPLICATE KEY UPDATE
     description = VALUES(description),
     params_schema = VALUES(params_schema);
 
+-- 创建AI总结设置表
+CREATE TABLE IF NOT EXISTS ai_summary_settings (
+  id VARCHAR(36) PRIMARY KEY,
+  user_id VARCHAR(36) NOT NULL,
+  enabled BOOLEAN DEFAULT TRUE,
+  send_time TIME NOT NULL DEFAULT '09:00:00',
+  email VARCHAR(100),
+  project_ids JSON,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  UNIQUE KEY unique_user_setting (user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- 插入更多示例事件数据
 INSERT INTO events (project_id, event_name, event_params, user_id, device_info, timestamp)
 VALUES 

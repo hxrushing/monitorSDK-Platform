@@ -2,6 +2,11 @@ import express from 'express';
 import cors from 'cors';
 import { createConnection } from 'mysql2/promise';
 import { createApiRouter } from './routes/api';
+import { SchedulerService } from './services/schedulerService';
+import { SummaryService } from './services/summaryService';
+import { StatsService } from './services/statsService';
+import { AIService } from './services/aiService';
+import { EmailService } from './services/emailService';
 import dotenv from 'dotenv';
 
 // 加载环境变量
@@ -23,13 +28,23 @@ async function main() {
 
     console.log('数据库连接成功');
 
+    // 初始化服务
+    const statsService = new StatsService(db);
+    const aiService = new AIService();
+    const emailService = new EmailService();
+    const summaryService = new SummaryService(db, statsService, aiService, emailService);
+    
+    // 启动定时任务服务
+    const schedulerService = new SchedulerService(db, summaryService);
+    schedulerService.start();
+
     // 中间件配置
     app.use(cors());
     app.use(express.json());
     app.use(express.urlencoded({ extended: true }));
 
     // API路由
-    app.use('/api', createApiRouter(db));
+    app.use('/api', createApiRouter(db, summaryService));
 
     // 错误处理中间件
     app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {

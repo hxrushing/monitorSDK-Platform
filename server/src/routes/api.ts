@@ -4,10 +4,11 @@ import { StatsService } from '../services/statsService';
 import { EventDefinitionService, AppError } from '../services/eventDefinitionService';
 import { TrackingService } from '../services/trackingService';
 import { UserService } from '../services/userService';
+import { SummaryService } from '../services/summaryService';
 import { Connection } from 'mysql2/promise';
 import { v4 as uuidv4 } from 'uuid';
 
-export function createApiRouter(db: Connection) {
+export function createApiRouter(db: Connection, summaryService?: SummaryService) {
   const router = express.Router();
   const statsService = new StatsService(db);
   const eventDefinitionService = new EventDefinitionService(db);
@@ -363,6 +364,79 @@ export function createApiRouter(db: Connection) {
       res.status(500).json({ success: false, error: 'Internal Server Error' });
     }
   });
+
+  // AI总结设置相关路由
+  if (summaryService) {
+    // 获取用户的总结设置
+    router.get('/ai-summary/settings', async (req, res) => {
+      try {
+        const userId = (req as any).user?.sub;
+        if (!userId) {
+          return res.status(401).json({ success: false, error: 'Unauthorized' });
+        }
+
+        const setting = await summaryService.getUserSetting(userId);
+        res.json({ success: true, data: setting });
+      } catch (error) {
+        console.error('获取总结设置失败:', error);
+        res.status(500).json({ success: false, error: 'Internal Server Error' });
+      }
+    });
+
+    // 创建或更新总结设置
+    router.post('/ai-summary/settings', async (req, res) => {
+      try {
+        const userId = (req as any).user?.sub;
+        if (!userId) {
+          return res.status(401).json({ success: false, error: 'Unauthorized' });
+        }
+
+        const { enabled, sendTime, email, projectIds } = req.body;
+        const setting = await summaryService.upsertSetting(userId, {
+          enabled,
+          sendTime,
+          email: email || undefined,
+          projectIds: projectIds && Array.isArray(projectIds) && projectIds.length > 0 ? projectIds : undefined,
+        });
+
+        res.json({ success: true, data: setting });
+      } catch (error: any) {
+        console.error('保存总结设置失败:', error);
+        const errorMessage = error?.message || 'Internal Server Error';
+        res.status(500).json({ success: false, error: errorMessage });
+      }
+    });
+
+    // 手动触发生成并发送总结（用于测试）
+    router.post('/ai-summary/send-now', async (req, res) => {
+      try {
+        const userId = (req as any).user?.sub;
+        if (!userId) {
+          return res.status(401).json({ success: false, error: 'Unauthorized' });
+        }
+
+        console.log('收到手动发送总结请求，用户ID:', userId);
+        
+        const setting = await summaryService.getUserSetting(userId);
+        if (!setting) {
+          return res.status(400).json({ success: false, error: '请先配置总结设置' });
+        }
+
+        console.log('开始生成并发送总结...');
+        const success = await summaryService.generateAndSendSummary(setting);
+        if (success) {
+          res.json({ success: true, message: '总结已发送，请查看您的邮箱' });
+        } else {
+          res.status(500).json({ success: false, error: '发送失败，请检查邮件配置和日志' });
+        }
+      } catch (error: any) {
+        console.error('手动发送总结失败:', error);
+        console.error('错误堆栈:', error?.stack);
+        const errorMessage = error?.message || 'Internal Server Error';
+        res.status(500).json({ success: false, error: errorMessage });
+      }
+    });
+  }
 
   return router;
 } 

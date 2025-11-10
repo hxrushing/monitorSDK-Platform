@@ -12,7 +12,8 @@ import {
   BugOutlined,
   CodeOutlined,
   BellOutlined,
-  MessageOutlined
+  MessageOutlined,
+  RobotOutlined
 } from '@ant-design/icons';
 import { Layout, Menu, Button, theme, Select, Modal, Form, Input, message, Dropdown, Space, Switch, Tooltip, Badge, Drawer, Typography, Divider } from 'antd';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -115,6 +116,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
     '/app/event-management': 'group-management',
     '/app/member-management': 'group-management',
     '/app/settings': 'group-system',
+    '/app/ai-summary': 'group-system',
     '/app/sdk-demo': 'group-example',
     '/app/sdk-module': 'group-example'
   };
@@ -191,6 +193,11 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
           key: '/app/settings',
           icon: <SettingOutlined />,
           label: '设置'
+        },
+        {
+          key: '/app/ai-summary',
+          icon: <RobotOutlined />,
+          label: 'AI 智能总结'
         }
       ]
     }

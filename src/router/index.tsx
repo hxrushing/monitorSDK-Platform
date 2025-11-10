@@ -14,6 +14,7 @@ const SDKDemo = lazy(() => import('@/pages/sdk-demo'));
 const SDKModule = lazy(() => import('@/pages/SDKModule'));
 const MemberManagement = lazy(() => import('@/pages/MemberManagement'));
 const SystemSettings = lazy(() => import('@/pages/SystemSettings'));
+const AISummarySettings = lazy(() => import('@/pages/AISummarySettings'));
 
 const isAuthed = () => !!localStorage.getItem('token') || !!localStorage.getItem('userInfo');
 
@@ -76,6 +77,10 @@ const router = createBrowserRouter([
       {
         path: 'settings',
         element: withSuspense(<SystemSettings />),
+      },
+      {
+        path: 'ai-summary',
+        element: withSuspense(<AISummarySettings />),
       },
     ],
   },
