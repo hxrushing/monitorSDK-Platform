@@ -1,4 +1,5 @@
 import { Connection, RowDataPacket } from 'mysql2/promise';
+import MarkdownIt from 'markdown-it';
 import { StatsService, StatsData } from './statsService';
 import { AIService, SummaryData } from './aiService';
 import { EmailService } from './emailService';
@@ -352,9 +353,12 @@ export class SummaryService {
 
       console.log(`收集到 ${summaryData.length} 个项目的数据，开始生成总结`);
 
-      // 使用AI生成总结
+      // 使用AI生成总结（Markdown）
       const summary = await this.aiService.generateSummary(summaryData);
       console.log('总结生成完成，长度:', summary.length);
+      // 使用 markdown-it 渲染为 HTML（兼容 CJS）
+      const md = new MarkdownIt({ html: false, linkify: true, breaks: false });
+      const summaryHtml = md.render(summary || '');
 
       // 发送邮件
       const html = `
@@ -365,16 +369,19 @@ export class SummaryService {
           <style>
             body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
             .container { max-width: 800px; margin: 0 auto; padding: 20px; }
-            h2 { color: #1890ff; }
-            h3 { color: #52c41a; margin-top: 20px; }
+            h1, h2, h3, h4 { color: #1890ff; margin: 16px 0 8px; }
+            h3 { color: #52c41a; }
             ul { margin: 10px 0; }
             li { margin: 5px 0; }
+            code { background: #f6f8fa; padding: 2px 4px; border-radius: 4px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+            pre { background: #f6f8fa; padding: 12px; border-radius: 6px; overflow: auto; }
+            blockquote { margin: 0; padding: 0 12px; color: #555; border-left: 4px solid #ddd; }
             .footer { margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; color: #999; font-size: 12px; }
           </style>
         </head>
         <body>
           <div class="container">
-            ${summary}
+            ${summaryHtml}
             <div class="footer">
               <p>此邮件由系统自动发送，请勿回复。</p>
               <p>如需修改设置，请登录系统进行配置。</p>
