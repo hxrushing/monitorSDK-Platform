@@ -26,13 +26,55 @@ export class AIService {
 
   constructor() {
     const apiKey = process.env.OPENAI_API_KEY;
+    const baseURL = process.env.OPENAI_BASE_URL || process.env.OPENAI_API_BASE;
+    const timeoutMs = parseInt(process.env.OPENAI_TIMEOUT_MS || '60000');
+
     if (apiKey) {
       this.client = new OpenAI({
         apiKey: apiKey,
+        baseURL,
+        timeout: timeoutMs,
+      } as any);
+
+      console.log('[AIService] OpenAI 客户端初始化', {
+        baseURL: baseURL || 'default',
+        timeoutMs,
+        model: process.env.OPENAI_MODEL || 'gpt-3.5-turbo',
       });
     } else {
       console.warn('未配置 OPENAI_API_KEY，AI 功能将不可用');
     }
+  }
+
+  private async generateWithRetry<T>(fn: () => Promise<T>, retries = 2): Promise<T> {
+    let lastError: any;
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      try {
+        return await fn();
+      } catch (err: any) {
+        lastError = err;
+        const code = err?.code || err?.name || 'UNKNOWN';
+        const status = err?.status;
+        const isTimeout =
+          code?.toString().includes('Timeout') ||
+          err?.message?.toLowerCase?.().includes('timeout') ||
+          status === 408;
+        const isNetwork =
+          code === 'ECONNRESET' ||
+          code === 'EAI_AGAIN' ||
+          code === 'ENOTFOUND' ||
+          code === 'ECONNREFUSED' ||
+          code === 'ETIMEDOUT';
+        if (attempt < retries && (isTimeout || isNetwork)) {
+          const backoff = 1000 * Math.pow(2, attempt);
+          console.warn(`[AIService] 调用失败（${code}/${status}），${backoff}ms 后重试，第 ${attempt + 1}/${retries} 次`);
+          await new Promise(r => setTimeout(r, backoff));
+          continue;
+        }
+        break;
+      }
+    }
+    throw lastError;
   }
 
   async generateSummary(data: SummaryData[]): Promise<string> {
@@ -43,27 +85,31 @@ export class AIService {
 
     try {
       const prompt = this.buildPrompt(data);
-      
-      const completion = await this.client.chat.completions.create({
-        model: process.env.OPENAI_MODEL || 'gpt-3.5-turbo',
-        messages: [
-          {
-            role: 'system',
-            content: '你是一个专业的数据分析助手，擅长用简洁、专业的中文总结数据分析结果。',
-          },
-          {
-            role: 'user',
-            content: prompt,
-          },
-        ],
-        temperature: 0.7,
-        max_tokens: 1000,
-      });
+      const model = process.env.OPENAI_MODEL || 'gpt-3.5-turbo';
+
+      const completion = await this.generateWithRetry(() =>
+        this.client!.chat.completions.create({
+          model,
+          messages: [
+            {
+              role: 'system',
+              content: '你是一个专业的数据分析助手，擅长用简洁、专业的中文总结数据分析结果。',
+            },
+            {
+              role: 'user',
+              content: prompt,
+            },
+          ],
+          temperature: 0.7,
+          max_tokens: 1000,
+        })
+      );
 
       const summary = completion.choices[0]?.message?.content || '';
       return summary || this.generateBasicSummary(data);
     } catch (error) {
       console.error('AI生成总结失败:', error);
+      console.error('[AIService] 可能的原因：\n- 无法访问 OpenAI（网络或代理）\n- 模型名称不正确\n- baseURL 配置不匹配（如使用 Azure/代理）\n- 超时时间过短，可设置 OPENAI_TIMEOUT_MS\n- 需要配置系统代理（HTTP(S)_PROXY/NO_PROXY）');
       // 如果AI调用失败，返回基础总结
       return this.generateBasicSummary(data);
     }
