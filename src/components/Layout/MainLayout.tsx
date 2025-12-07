@@ -114,7 +114,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
     '/app/dashboard': 'group-analysis',
     '/app/events': 'group-analysis',
     '/app/funnel': 'group-analysis',
-    '/app/prediction': 'group-analysis',
+    '/app/prediction': 'group-prediction',
     '/app/prediction/history': 'group-prediction',
     '/app/event-management': 'group-management',
     '/app/member-management': 'group-management',
@@ -144,17 +144,17 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
           icon: <ApartmentOutlined />,
           label: '漏斗',
         },
-        {
-          key: '/app/prediction',
-          icon: <LineChartOutlined />,
-          label: '时序预测',
-        },
       ]
     },
     {
       key: 'group-prediction',
       label: '预测',
       children: [
+        {
+          key: '/app/prediction',
+          icon: <LineChartOutlined />,
+          label: '时序预测',
+        },
         {
           key: '/app/prediction/history',
           icon: <HistoryOutlined />,

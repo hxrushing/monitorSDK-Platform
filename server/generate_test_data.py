@@ -3,6 +3,7 @@
 用于时序预测功能测试
 """
 import random
+import json
 from datetime import datetime, timedelta
 
 # 配置
@@ -41,6 +42,9 @@ def generate_sql():
     sql_statements.append("-- 生成过去14天的测试数据")
     sql_statements.append(f"USE `sdk-platform`;")
     sql_statements.append(f"SET @project_id = '{PROJECT_ID}';")
+    sql_statements.append("")
+    sql_statements.append("-- 清空现有测试数据")
+    sql_statements.append(f"DELETE FROM events WHERE project_id = '{PROJECT_ID}';")
     sql_statements.append("")
     sql_statements.append("INSERT INTO events (project_id, event_name, event_params, user_id, device_info, timestamp) VALUES")
     
@@ -114,23 +118,50 @@ def generate_sql():
                 # 随机设备
                 device = random.choice(DEVICES)
                 
-                # 生成SQL值
-                event_params = f'{{"page": "{page}", "title": "页面-{page}"}}'
-                device_info = (
-                    f'{{"userAgent": "{device["userAgent"]}", '
-                    f'"platform": "{device["platform"]}", '
-                    f'"language": "{device["language"]}", '
-                    f'"screenResolution": "{device["screenResolution"]}"}}'
-                )
+                # 生成SQL值 - 使用JSON_OBJECT函数或转义单引号
+                # 对于JSON字符串，需要转义单引号
+                event_params_dict = {"page": page, "title": f"页面-{page}"}
+                event_params_json = json.dumps(event_params_dict, ensure_ascii=False)
+                # 转义单引号用于SQL
+                event_params_sql = event_params_json.replace("'", "''")
+                
+                device_info_dict = {
+                    "userAgent": device["userAgent"],
+                    "platform": device["platform"],
+                    "language": device["language"],
+                    "screenResolution": device["screenResolution"]
+                }
+                device_info_json = json.dumps(device_info_dict, ensure_ascii=False)
+                # 转义单引号用于SQL
+                device_info_sql = device_info_json.replace("'", "''")
+                
                 timestamp = event_time.strftime('%Y-%m-%d %H:%M:%S')
                 
+                # 生成页面浏览事件
                 value = (
-                    f"('{PROJECT_ID}', 'pageview', '{event_params}', "
-                    f"'{user_id}', '{device_info}', '{timestamp}')"
+                    f"('{PROJECT_ID}', '页面浏览', '{event_params_sql}', "
+                    f"'{user_id}', '{device_info_sql}', '{timestamp}')"
                 )
                 all_values.append(value)
-                
                 events_generated += 1
+                
+                # 在页面浏览后，随机生成点击事件（约60%的概率）
+                if random.random() < 0.6:
+                    # 随机选择点击事件类型
+                    click_event_type = random.choice(['点击事件1', '点击事件2', '点击事件3'])
+                    click_params_dict = {"element": "button", "action": click_event_type}
+                    click_params_json = json.dumps(click_params_dict, ensure_ascii=False)
+                    click_params_sql = click_params_json.replace("'", "''")
+                    
+                    # 点击事件时间稍晚于页面浏览（1-30秒后）
+                    click_time = event_time + timedelta(seconds=random.randint(1, 30))
+                    click_timestamp = click_time.strftime('%Y-%m-%d %H:%M:%S')
+                    
+                    click_value = (
+                        f"('{PROJECT_ID}', '{click_event_type}', '{click_params_sql}', "
+                        f"'{user_id}', '{device_info_sql}', '{click_timestamp}')"
+                    )
+                    all_values.append(click_value)
             
             if events_generated >= target_events:
                 break
@@ -144,15 +175,55 @@ def generate_sql():
     
     sql_statements.append("")
     sql_statements.append("-- 查看生成的数据统计")
+    sql_statements.append("-- 页面浏览事件统计")
     sql_statements.append("SELECT ")
+    sql_statements.append("    '页面浏览' as event_name,")
     sql_statements.append("    DATE(timestamp) as date,")
-    sql_statements.append("    COUNT(*) as pv,")
-    sql_statements.append("    COUNT(DISTINCT user_id) as uv,")
-    sql_statements.append("    ROUND(COUNT(DISTINCT user_id) / COUNT(*) * 100, 2) as conversion_rate_percent")
+    sql_statements.append("    COUNT(*) as event_count,")
+    sql_statements.append("    COUNT(DISTINCT user_id) as user_count")
     sql_statements.append("FROM events")
     sql_statements.append(f"WHERE project_id = '{PROJECT_ID}'")
     sql_statements.append("    AND timestamp >= DATE_SUB(NOW(), INTERVAL 14 DAY)")
-    sql_statements.append("    AND event_name = 'pageview'")
+    sql_statements.append("    AND event_name = '页面浏览'")
+    sql_statements.append("GROUP BY DATE(timestamp)")
+    sql_statements.append("ORDER BY date ASC;")
+    sql_statements.append("")
+    sql_statements.append("-- 点击事件1统计")
+    sql_statements.append("SELECT ")
+    sql_statements.append("    '点击事件1' as event_name,")
+    sql_statements.append("    DATE(timestamp) as date,")
+    sql_statements.append("    COUNT(*) as event_count,")
+    sql_statements.append("    COUNT(DISTINCT user_id) as user_count")
+    sql_statements.append("FROM events")
+    sql_statements.append(f"WHERE project_id = '{PROJECT_ID}'")
+    sql_statements.append("    AND timestamp >= DATE_SUB(NOW(), INTERVAL 14 DAY)")
+    sql_statements.append("    AND event_name = '点击事件1'")
+    sql_statements.append("GROUP BY DATE(timestamp)")
+    sql_statements.append("ORDER BY date ASC;")
+    sql_statements.append("")
+    sql_statements.append("-- 点击事件2统计")
+    sql_statements.append("SELECT ")
+    sql_statements.append("    '点击事件2' as event_name,")
+    sql_statements.append("    DATE(timestamp) as date,")
+    sql_statements.append("    COUNT(*) as event_count,")
+    sql_statements.append("    COUNT(DISTINCT user_id) as user_count")
+    sql_statements.append("FROM events")
+    sql_statements.append(f"WHERE project_id = '{PROJECT_ID}'")
+    sql_statements.append("    AND timestamp >= DATE_SUB(NOW(), INTERVAL 14 DAY)")
+    sql_statements.append("    AND event_name = '点击事件2'")
+    sql_statements.append("GROUP BY DATE(timestamp)")
+    sql_statements.append("ORDER BY date ASC;")
+    sql_statements.append("")
+    sql_statements.append("-- 点击事件3统计")
+    sql_statements.append("SELECT ")
+    sql_statements.append("    '点击事件3' as event_name,")
+    sql_statements.append("    DATE(timestamp) as date,")
+    sql_statements.append("    COUNT(*) as event_count,")
+    sql_statements.append("    COUNT(DISTINCT user_id) as user_count")
+    sql_statements.append("FROM events")
+    sql_statements.append(f"WHERE project_id = '{PROJECT_ID}'")
+    sql_statements.append("    AND timestamp >= DATE_SUB(NOW(), INTERVAL 14 DAY)")
+    sql_statements.append("    AND event_name = '点击事件3'")
     sql_statements.append("GROUP BY DATE(timestamp)")
     sql_statements.append("ORDER BY date ASC;")
     
