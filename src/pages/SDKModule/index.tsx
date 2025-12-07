@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Card, Button, Space, message, Typography, Divider, Alert, Row, Col } from 'antd';
-import { BugOutlined, PlayCircleOutlined, WarningOutlined, InfoCircleOutlined } from '@ant-design/icons';
+import { Card, Button, Space, message, Typography, Divider, Alert, Row, Col, Tag } from 'antd';
+import { BugOutlined, PlayCircleOutlined, WarningOutlined, InfoCircleOutlined, EyeOutlined } from '@ant-design/icons';
 import AnalyticsSDK from '@/sdk';
 import useGlobalStore from '@/store/globalStore';
 
@@ -129,6 +129,28 @@ const SDKModule: React.FC = () => {
           message.error('已模拟Promise拒绝错误');
         }
       });
+  };
+
+  // 模拟白屏
+  const simulateBlankScreen = () => {
+    if (sdk) {
+      sdk.trackBlankScreen('手动模拟白屏', {
+        模拟原因: '用户手动触发',
+        页面URL: window.location.href,
+        检测方法: '手动上报'
+      });
+      addToLog('白屏事件已手动上报');
+      message.warning('已模拟白屏事件');
+    }
+  };
+
+  // 获取白屏检测状态
+  const getBlankScreenStatus = () => {
+    if (sdk) {
+      const status = sdk.getBlankScreenStatus();
+      message.info(`白屏检测状态: ${status.enabled ? '已启用' : '已禁用'}`);
+      addToLog(`白屏检测配置: ${JSON.stringify(status.config)}`);
+    }
   };
 
 
@@ -263,6 +285,56 @@ const SDKModule: React.FC = () => {
                     Promise拒绝
                   </Button>
                 </Space>
+              </Space>
+            </Card>
+          </Col>
+        </Row>
+
+        <Row gutter={[24, 24]} style={{ marginTop: 24 }}>
+          {/* 白屏检测区域 */}
+          <Col xs={24}>
+            <Card 
+              title={
+                <Space>
+                  <EyeOutlined style={{ color: '#faad14' }} />
+                  <span>白屏检测</span>
+                </Space>
+              }
+            >
+              <Space direction="vertical" style={{ width: '100%' }} size="middle">
+                <Alert
+                  message="白屏检测功能"
+                  description="SDK会自动检测页面白屏情况。当页面在指定时间内没有内容时，会自动上报白屏事件。"
+                  type="info"
+                  showIcon
+                  icon={<InfoCircleOutlined />}
+                />
+                
+                <Space wrap>
+                  <Button 
+                    type="primary"
+                    onClick={simulateBlankScreen}
+                  >
+                    模拟白屏事件
+                  </Button>
+                  
+                  <Button 
+                    onClick={getBlankScreenStatus}
+                  >
+                    查看检测状态
+                  </Button>
+                </Space>
+
+                <div style={{ marginTop: 16 }}>
+                  <Text strong>白屏检测说明：</Text>
+                  <ul style={{ marginTop: 8, paddingLeft: 20 }}>
+                    <li>SDK会在页面加载后自动启动白屏检测</li>
+                    <li>默认每3秒检测一次页面内容</li>
+                    <li>如果页面在5秒内没有内容，会触发白屏事件上报</li>
+                    <li>使用MutationObserver监听DOM变化，提高检测准确性</li>
+                    <li>支持自定义检测配置（根元素、检测间隔、阈值等）</li>
+                  </ul>
+                </div>
               </Space>
             </Card>
           </Col>

@@ -211,5 +211,61 @@ export const apiService = {
   async sendAISummaryNow() {
     const data = await api.post('/ai-summary/send-now');
     return data;
+  },
+
+  // 时序预测相关API
+  async checkPredictionHealth() {
+    const data = await api.get('/prediction/health');
+    return data.data;
+  },
+
+  async predict(params: {
+    projectId: string;
+    metricType: 'pv' | 'uv' | 'conversion_rate';
+    modelType?: 'lstm' | 'gru';
+    days?: number;
+  }) {
+    // 预测需要训练模型，设置更长的超时时间（60秒）
+    const data = await api.post('/prediction/predict', params, {
+      timeout: 60000
+    });
+    return data;
+  },
+
+  async predictBatch(params: {
+    projectId: string;
+    metrics: Array<'pv' | 'uv' | 'conversion_rate'>;
+    modelType?: 'lstm' | 'gru';
+    days?: number;
+  }) {
+    // 批量预测需要更长时间，设置更长的超时时间（120秒）
+    const data = await api.post('/prediction/predict-batch', params, {
+      timeout: 120000
+    });
+    return data;
+  },
+
+  // 预测记录相关API
+  async getPredictionRecords(params: {
+    projectId?: string;
+    metricType?: 'pv' | 'uv' | 'conversion_rate';
+    modelType?: 'lstm' | 'gru';
+    startDate?: string;
+    endDate?: string;
+    page?: number;
+    pageSize?: number;
+  }) {
+    const data = await api.get('/prediction/records', { params });
+    return data.data;
+  },
+
+  async getPredictionRecord(id: string) {
+    const data = await api.get(`/prediction/records/${id}`);
+    return data.data;
+  },
+
+  async deletePredictionRecord(id: string) {
+    const data = await api.delete(`/prediction/records/${id}`);
+    return data;
   }
 }; 

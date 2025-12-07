@@ -5,7 +5,8 @@ import {
   BarChartOutlined,
   FunnelPlotOutlined,
   SettingOutlined,
-  RobotOutlined
+  RobotOutlined,
+  LineChartOutlined
 } from '@ant-design/icons'
 
 const { Sider } = Layout
@@ -47,6 +48,11 @@ const Sidebar = () => {
       key: '/ai-summary',
       icon: <RobotOutlined />,
       label: 'AI 智能总结'
+    },
+    {
+      key: '/prediction',
+      icon: <LineChartOutlined />,
+      label: '时序预测'
     }
   ]
 

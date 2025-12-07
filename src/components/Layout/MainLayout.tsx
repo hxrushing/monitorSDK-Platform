@@ -13,7 +13,8 @@ import {
   CodeOutlined,
   BellOutlined,
   MessageOutlined,
-  RobotOutlined
+  RobotOutlined,
+  HistoryOutlined
 } from '@ant-design/icons';
 import { Layout, Menu, Button, theme, Select, Modal, Form, Input, message, Dropdown, Space, Switch, Tooltip, Badge, Drawer, Typography, Divider } from 'antd';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -113,6 +114,8 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
     '/app/dashboard': 'group-analysis',
     '/app/events': 'group-analysis',
     '/app/funnel': 'group-analysis',
+    '/app/prediction': 'group-analysis',
+    '/app/prediction/history': 'group-prediction',
     '/app/event-management': 'group-management',
     '/app/member-management': 'group-management',
     '/app/settings': 'group-system',
@@ -140,6 +143,22 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
           key: '/app/funnel',
           icon: <ApartmentOutlined />,
           label: '漏斗',
+        },
+        {
+          key: '/app/prediction',
+          icon: <LineChartOutlined />,
+          label: '时序预测',
+        },
+      ]
+    },
+    {
+      key: 'group-prediction',
+      label: '预测',
+      children: [
+        {
+          key: '/app/prediction/history',
+          icon: <HistoryOutlined />,
+          label: '预测历史',
         },
       ]
     },

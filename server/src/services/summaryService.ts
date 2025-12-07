@@ -239,6 +239,8 @@ export class SummaryService {
 
       // 获取项目列表
       let projectIds: string[] = [];
+      const MAX_PROJECTS = parseInt(process.env.AI_MAX_PROJECTS || '50'); // 最多处理的项目数
+      
       if (setting.projectIds && Array.isArray(setting.projectIds) && setting.projectIds.length > 0) {
         projectIds = setting.projectIds;
         console.log('使用指定的项目:', projectIds);
@@ -255,6 +257,12 @@ export class SummaryService {
       if (projectIds.length === 0) {
         console.log(`用户 ${setting.userId} 没有项目数据`);
         return false;
+      }
+
+      // 限制项目数量，避免数据量过大
+      if (projectIds.length > MAX_PROJECTS) {
+        console.warn(`项目数量过多（${projectIds.length}），将只处理前 ${MAX_PROJECTS} 个项目`);
+        projectIds = projectIds.slice(0, MAX_PROJECTS);
       }
 
       // 获取昨天的日期
@@ -352,10 +360,16 @@ export class SummaryService {
       }
 
       console.log(`收集到 ${summaryData.length} 个项目的数据，开始生成总结`);
+      
+      // 记录数据量信息
+      const totalEvents = summaryData.reduce((sum, p) => sum + p.topEvents.length, 0);
+      console.log(`数据统计：${summaryData.length} 个项目，${totalEvents} 个事件记录`);
 
       // 使用AI生成总结（Markdown）
+      const startTime = Date.now();
       const summary = await this.aiService.generateSummary(summaryData);
-      console.log('总结生成完成，长度:', summary.length);
+      const duration = Date.now() - startTime;
+      console.log(`总结生成完成，长度: ${summary.length} 字符，耗时: ${duration}ms`);
       // 使用 markdown-it 渲染为 HTML（兼容 CJS）
       const md = new MarkdownIt({ html: false, linkify: true, breaks: false });
       const summaryHtml = md.render(summary || '');

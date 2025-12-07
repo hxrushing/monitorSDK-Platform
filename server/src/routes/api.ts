@@ -5,6 +5,8 @@ import { EventDefinitionService, AppError } from '../services/eventDefinitionSer
 import { TrackingService } from '../services/trackingService';
 import { UserService } from '../services/userService';
 import { SummaryService } from '../services/summaryService';
+import { PredictionService } from '../services/predictionService';
+import { PredictionRecordService } from '../services/predictionRecordService';
 import { Connection } from 'mysql2/promise';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -14,6 +16,8 @@ export function createApiRouter(db: Connection, summaryService?: SummaryService)
   const eventDefinitionService = new EventDefinitionService(db);
   const trackingService = new TrackingService(db);
   const userService = new UserService(db);
+  const predictionService = new PredictionService(db);
+  const predictionRecordService = new PredictionRecordService(db);
 
   const JWT_SECRET: Secret = process.env.JWT_SECRET || 'dev-secret';
   const JWT_EXPIRES_IN: SignOptions['expiresIn'] = (process.env.JWT_EXPIRES_IN as any) || '7d';
@@ -437,6 +441,220 @@ export function createApiRouter(db: Connection, summaryService?: SummaryService)
       }
     });
   }
+
+  // 时序预测相关路由
+  // 检查ML服务健康状态
+  router.get('/prediction/health', async (req, res) => {
+    try {
+      const isHealthy = await predictionService.checkMLServiceHealth();
+      res.json({ 
+        success: true, 
+        data: { 
+          mlServiceAvailable: isHealthy,
+          mlServiceUrl: process.env.ML_SERVICE_URL || 'http://localhost:5000'
+        } 
+      });
+    } catch (error) {
+      console.error('检查ML服务状态失败:', error);
+      res.status(500).json({ success: false, error: 'Internal Server Error' });
+    }
+  });
+
+  // 预测单个指标
+  router.post('/prediction/predict', async (req, res) => {
+    try {
+      const { projectId, metricType, modelType, days } = req.body;
+      
+      if (!projectId || !metricType) {
+        return res.status(400).json({ 
+          success: false, 
+          error: 'projectId 和 metricType 是必需的' 
+        });
+      }
+
+      const userId = (req as any).user?.sub; // 获取当前用户ID
+      
+      const result = await predictionService.predict({
+        projectId,
+        metricType: metricType || 'pv',
+        modelType: modelType || 'lstm',
+        days: days || 7
+      });
+
+      // 如果预测成功，自动保存记录
+      if (result.success && result.predictions) {
+        try {
+          await predictionRecordService.createRecord({
+            projectId,
+            userId,
+            metricType: result.metricType as 'pv' | 'uv' | 'conversion_rate',
+            modelType: result.modelType as 'lstm' | 'gru',
+            predictionDays: days || 7,
+            predictions: result.predictions,
+            historicalData: result.historicalData,
+            modelInfo: result.modelInfo
+          });
+        } catch (saveError) {
+          // 保存失败不影响预测结果返回，只记录日志
+          console.error('保存预测记录失败:', saveError);
+        }
+      }
+
+      res.json(result);
+    } catch (error: any) {
+      console.error('预测失败:', error);
+      res.status(500).json({ 
+        success: false, 
+        error: error.message || 'Internal Server Error' 
+      });
+    }
+  });
+
+  // 批量预测多个指标
+  router.post('/prediction/predict-batch', async (req, res) => {
+    try {
+      const { projectId, metrics, modelType, days } = req.body;
+      
+      if (!projectId || !metrics || !Array.isArray(metrics)) {
+        return res.status(400).json({ 
+          success: false, 
+          error: 'projectId 和 metrics 是必需的，且 metrics 必须是数组' 
+        });
+      }
+
+      const userId = (req as any).user?.sub; // 获取当前用户ID
+      
+      const result = await predictionService.predictBatch(
+        projectId,
+        metrics,
+        modelType || 'lstm',
+        days || 7
+      );
+
+      // 如果批量预测成功，为每个指标保存记录
+      if (result.success && result.results) {
+        try {
+          for (const [metric, predictions] of Object.entries(result.results)) {
+            if (predictions && Array.isArray(predictions)) {
+              await predictionRecordService.createRecord({
+                projectId,
+                userId,
+                metricType: metric as 'pv' | 'uv' | 'conversion_rate',
+                modelType: result.modelType as 'lstm' | 'gru',
+                predictionDays: days || 7,
+                predictions: predictions,
+                modelInfo: { batch: true }
+              });
+            }
+          }
+        } catch (saveError) {
+          // 保存失败不影响预测结果返回，只记录日志
+          console.error('保存批量预测记录失败:', saveError);
+        }
+      }
+
+      res.json(result);
+    } catch (error: any) {
+      console.error('批量预测失败:', error);
+      res.status(500).json({ 
+        success: false, 
+        error: error.message || 'Internal Server Error' 
+      });
+    }
+  });
+
+  // 查询预测历史记录
+  router.get('/prediction/records', async (req, res) => {
+    try {
+      const userId = (req as any).user?.sub;
+      const { 
+        projectId, 
+        metricType, 
+        modelType, 
+        startDate, 
+        endDate, 
+        page, 
+        pageSize 
+      } = req.query;
+
+      const result = await predictionRecordService.getRecords({
+        projectId: projectId as string,
+        userId: userId, // 只查询当前用户的记录
+        metricType: metricType as 'pv' | 'uv' | 'conversion_rate' | undefined,
+        modelType: modelType as 'lstm' | 'gru' | undefined,
+        startDate: startDate as string | undefined,
+        endDate: endDate as string | undefined,
+        page: page ? parseInt(page as string) : undefined,
+        pageSize: pageSize ? parseInt(pageSize as string) : undefined
+      });
+
+      res.json({ success: true, data: result });
+    } catch (error: any) {
+      console.error('查询预测记录失败:', error);
+      res.status(500).json({ 
+        success: false, 
+        error: error.message || 'Internal Server Error' 
+      });
+    }
+  });
+
+  // 获取单个预测记录详情
+  router.get('/prediction/records/:id', async (req, res) => {
+    try {
+      const userId = (req as any).user?.sub;
+      const { id } = req.params;
+
+      const record = await predictionRecordService.getRecordById(id);
+
+      if (!record) {
+        return res.status(404).json({ 
+          success: false, 
+          error: '预测记录不存在' 
+        });
+      }
+
+      // 确保用户只能查看自己的记录
+      if (userId && record.userId && record.userId !== userId) {
+        return res.status(403).json({ 
+          success: false, 
+          error: '无权访问此记录' 
+        });
+      }
+
+      res.json({ success: true, data: record });
+    } catch (error: any) {
+      console.error('获取预测记录失败:', error);
+      res.status(500).json({ 
+        success: false, 
+        error: error.message || 'Internal Server Error' 
+      });
+    }
+  });
+
+  // 删除预测记录
+  router.delete('/prediction/records/:id', async (req, res) => {
+    try {
+      const userId = (req as any).user?.sub;
+      const { id } = req.params;
+
+      const success = await predictionRecordService.deleteRecord(id, userId);
+
+      if (success) {
+        res.json({ success: true, message: '删除成功' });
+      } else {
+        res.status(404).json({ 
+          success: false, 
+          error: '记录不存在或无权删除' 
+        });
+      }
+    } catch (error: any) {
+      console.error('删除预测记录失败:', error);
+      res.status(500).json({ 
+        success: false, 
+        error: error.message || 'Internal Server Error' 
+      });
+    }
+  });
 
   return router;
 } 

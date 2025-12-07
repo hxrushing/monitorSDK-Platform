@@ -27,6 +27,15 @@ interface BatchConfig {
   maxStorageSize: number;      // 最大存储大小（字节）
 }
 
+// 白屏检测配置接口
+interface BlankScreenConfig {
+  enabled: boolean;            // 是否启用白屏检测
+  checkInterval: number;        // 检测间隔（毫秒），默认3000
+  rootSelector: string;         // 根元素选择器，默认'#root'
+  threshold: number;            // 白屏判定阈值（毫秒），默认5000
+  checkElements: string[];      // 需要检查的关键元素选择器
+}
+
 // 事件队列项接口
 interface QueuedEvent {
   id: string;
@@ -55,8 +64,15 @@ class AnalyticsSDK {
   private flushTimer: NodeJS.Timeout | null = null;
   private isOnline: boolean = navigator.onLine;
   private storageKey: string;
+  
+  // 白屏检测相关属性
+  private blankScreenConfig: BlankScreenConfig;
+  private blankScreenCheckTimer: NodeJS.Timeout | null = null;
+  private blankScreenObserver: MutationObserver | null = null;
+  private lastContentCheckTime: number = Date.now();
+  private blankScreenReported: boolean = false;
 
-  private constructor(projectId: string, endpoint: string, config?: Partial<BatchConfig>) {
+  private constructor(projectId: string, endpoint: string, config?: Partial<BatchConfig>, blankScreenConfig?: Partial<BlankScreenConfig>) {
     this.projectId = projectId;
     this.endpoint = endpoint;
     this.storageKey = `analytics_events_${projectId}`;
@@ -72,6 +88,16 @@ class AnalyticsSDK {
       ...config
     };
 
+    // 默认白屏检测配置
+    this.blankScreenConfig = {
+      enabled: true,              // 默认启用
+      checkInterval: 3000,        // 每3秒检测一次
+      rootSelector: '#root',      // 默认根元素
+      threshold: 5000,            // 5秒无内容判定为白屏
+      checkElements: ['#root', 'body'], // 默认检查的元素
+      ...blankScreenConfig
+    };
+
     this.commonParams = {
       deviceInfo: this.getDeviceInfo(),
       sdkVersion: '1.0.0'
@@ -79,13 +105,14 @@ class AnalyticsSDK {
 
     this.initErrorCapture();
     this.initBatchMechanism();
+    this.initBlankScreenDetection();
     this.loadOfflineEvents();
   }
 
-  public static getInstance(projectId: string, endpoint: string, config?: Partial<BatchConfig>): AnalyticsSDK {
+  public static getInstance(projectId: string, endpoint: string, config?: Partial<BatchConfig>, blankScreenConfig?: Partial<BlankScreenConfig>): AnalyticsSDK {
     const key = `${projectId}-${endpoint}`;
     if (!AnalyticsSDK.instances.has(key)) {
-      AnalyticsSDK.instances.set(key, new AnalyticsSDK(projectId, endpoint, config));
+      AnalyticsSDK.instances.set(key, new AnalyticsSDK(projectId, endpoint, config, blankScreenConfig));
     }
     return AnalyticsSDK.instances.get(key)!;
   }
@@ -434,6 +461,239 @@ class AnalyticsSDK {
         reason: event.reason,
       }, 'high'); // 未处理的Promise拒绝使用高优先级
     });
+  }
+
+  // 初始化白屏检测
+  private initBlankScreenDetection(): void {
+    if (!this.blankScreenConfig.enabled) {
+      return;
+    }
+
+    // 等待页面加载完成后再开始检测
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', () => {
+        this.startBlankScreenDetection();
+      });
+    } else {
+      // 页面已加载，延迟一下再开始检测（给React等框架时间渲染）
+      setTimeout(() => {
+        this.startBlankScreenDetection();
+      }, 2000);
+    }
+  }
+
+  // 启动白屏检测
+  private startBlankScreenDetection(): void {
+    // 使用MutationObserver监听DOM变化
+    this.initMutationObserver();
+
+    // 启动定时检测
+    this.startBlankScreenTimer();
+
+    // 页面可见性变化时重新检测
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) {
+        this.lastContentCheckTime = Date.now();
+        this.blankScreenReported = false;
+        this.checkBlankScreen();
+      }
+    });
+  }
+
+  // 初始化MutationObserver
+  private initMutationObserver(): void {
+    if (!window.MutationObserver) {
+      console.warn('MutationObserver not supported, using fallback detection');
+      return;
+    }
+
+    const rootElement = document.querySelector(this.blankScreenConfig.rootSelector);
+    if (!rootElement) {
+      console.warn(`Root element ${this.blankScreenConfig.rootSelector} not found`);
+      return;
+    }
+
+    this.blankScreenObserver = new MutationObserver(() => {
+      // DOM发生变化，更新最后检查时间
+      this.lastContentCheckTime = Date.now();
+      // 如果之前报告过白屏，现在有变化了，重置标志
+      if (this.blankScreenReported) {
+        this.blankScreenReported = false;
+      }
+    });
+
+    // 监听根元素及其子元素的变化
+    this.blankScreenObserver.observe(rootElement, {
+      childList: true,
+      subtree: true,
+      attributes: false,
+      characterData: true
+    });
+  }
+
+  // 启动白屏检测定时器
+  private startBlankScreenTimer(): void {
+    if (this.blankScreenCheckTimer) {
+      clearInterval(this.blankScreenCheckTimer);
+    }
+
+    this.blankScreenCheckTimer = setInterval(() => {
+      this.checkBlankScreen();
+    }, this.blankScreenConfig.checkInterval);
+  }
+
+  // 停止白屏检测定时器
+  private stopBlankScreenTimer(): void {
+    if (this.blankScreenCheckTimer) {
+      clearInterval(this.blankScreenCheckTimer);
+      this.blankScreenCheckTimer = null;
+    }
+  }
+
+  // 检测白屏
+  private checkBlankScreen(): void {
+    // 如果已经报告过白屏，避免重复报告
+    if (this.blankScreenReported) {
+      return;
+    }
+
+    const rootElement = document.querySelector(this.blankScreenConfig.rootSelector);
+    if (!rootElement) {
+      return;
+    }
+
+    // 检查根元素是否有内容
+    const hasContent = this.hasPageContent(rootElement);
+
+    if (!hasContent) {
+      // 检查是否超过阈值时间
+      const timeSinceLastContent = Date.now() - this.lastContentCheckTime;
+      
+      if (timeSinceLastContent >= this.blankScreenConfig.threshold) {
+        this.reportBlankScreen({
+          检测时间: new Date().toISOString(),
+          无内容持续时间: `${timeSinceLastContent}ms`,
+          根元素选择器: this.blankScreenConfig.rootSelector,
+          页面URL: window.location.href,
+          用户代理: navigator.userAgent
+        });
+        this.blankScreenReported = true;
+      }
+    } else {
+      // 有内容，更新最后检查时间
+      this.lastContentCheckTime = Date.now();
+    }
+  }
+
+  // 检查页面是否有内容
+  private hasPageContent(element: Element | null): boolean {
+    if (!element) {
+      return false;
+    }
+
+    // 检查元素是否有文本内容（去除空白字符）
+    const textContent = element.textContent?.trim() || '';
+    if (textContent.length > 0) {
+      return true;
+    }
+
+    // 检查是否有子元素
+    const children = element.children;
+    if (children.length > 0) {
+      // 递归检查子元素
+      for (let i = 0; i < children.length; i++) {
+        if (this.hasPageContent(children[i])) {
+          return true;
+        }
+      }
+    }
+
+    // 检查是否有图片
+    const images = element.querySelectorAll('img');
+    if (images.length > 0) {
+      return true;
+    }
+
+    // 检查是否有SVG
+    const svgs = element.querySelectorAll('svg');
+    if (svgs.length > 0) {
+      return true;
+    }
+
+    // 检查是否有Canvas
+    const canvases = element.querySelectorAll('canvas');
+    if (canvases.length > 0) {
+      return true;
+    }
+
+    // 检查关键元素是否存在
+    for (const selector of this.blankScreenConfig.checkElements) {
+      if (selector !== this.blankScreenConfig.rootSelector) {
+        const element = document.querySelector(selector);
+        if (element && this.hasPageContent(element)) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
+  // 上报白屏事件
+  private reportBlankScreen(details: Record<string, any>): void {
+    this.track('blankScreen', {
+      白屏类型: '页面无内容',
+      ...details
+    }, 'high'); // 白屏事件使用高优先级
+
+    console.warn('检测到白屏:', details);
+  }
+
+  // 专门用于白屏事件的方法
+  public trackBlankScreen(blankScreenType: string, details: Record<string, any>) {
+    this.track('blankScreen', {
+      白屏类型: blankScreenType,
+      ...details,
+      检测时间: new Date().toISOString()
+    }, 'high'); // 白屏事件使用高优先级
+  }
+
+  // 更新白屏检测配置
+  public updateBlankScreenConfig(newConfig: Partial<BlankScreenConfig>): void {
+    const wasEnabled = this.blankScreenConfig.enabled;
+    this.blankScreenConfig = { ...this.blankScreenConfig, ...newConfig };
+
+    if (this.blankScreenConfig.enabled && !wasEnabled) {
+      // 从禁用变为启用，重新初始化
+      this.initBlankScreenDetection();
+    } else if (!this.blankScreenConfig.enabled && wasEnabled) {
+      // 从启用变为禁用，清理资源
+      this.destroyBlankScreenDetection();
+    } else if (this.blankScreenConfig.enabled) {
+      // 配置更新，重启检测
+      this.destroyBlankScreenDetection();
+      this.startBlankScreenDetection();
+    }
+  }
+
+  // 销毁白屏检测（清理资源）
+  private destroyBlankScreenDetection(): void {
+    this.stopBlankScreenTimer();
+    
+    if (this.blankScreenObserver) {
+      this.blankScreenObserver.disconnect();
+      this.blankScreenObserver = null;
+    }
+
+    this.blankScreenReported = false;
+  }
+
+  // 获取白屏检测状态
+  public getBlankScreenStatus(): { enabled: boolean; config: BlankScreenConfig } {
+    return {
+      enabled: this.blankScreenConfig.enabled,
+      config: { ...this.blankScreenConfig }
+    };
   }
 }
 
