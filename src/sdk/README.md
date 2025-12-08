@@ -18,6 +18,18 @@ interface BatchConfig {
   retryDelay: number;          // 重试延迟毫秒 (默认: 1000)
   enableOfflineStorage: boolean; // 是否启用离线存储 (默认: true)
   maxStorageSize: number;      // 最大存储大小字节 (默认: 1MB)
+  adaptive?: AdaptiveBatchConfig; // 自适应批量大小配置
+}
+
+interface AdaptiveBatchConfig {
+  enabled: boolean;             // 是否启用自适应批量大小 (默认: true)
+  minBatchSize: number;        // 最小批量大小 (默认: 10)
+  maxBatchSize: number;        // 最大批量大小 (默认: 100)
+  initialBatchSize: number;     // 初始批量大小 (默认: 50)
+  queueLengthWeight: number;    // 队列长度权重 0-1 (默认: 0.3)
+  networkQualityWeight: number; // 网络质量权重 0-1 (默认: 0.7)
+  adjustmentInterval: number;   // 调整间隔毫秒 (默认: 30000)
+  networkCheckInterval: number; // 网络检查间隔毫秒 (默认: 10000)
 }
 ```
 
@@ -43,6 +55,16 @@ const customSdk = AnalyticsSDK.getInstance('project-id', 'endpoint', {
   retryDelay: 2000,        // 重试延迟2秒
   enableOfflineStorage: true,
   maxStorageSize: 2 * 1024 * 1024, // 2MB存储
+  adaptive: {
+    enabled: true,          // 启用自适应批量大小
+    minBatchSize: 5,       // 最小批量5个
+    maxBatchSize: 50,      // 最大批量50个
+    initialBatchSize: 20,  // 初始批量20个
+    queueLengthWeight: 0.4, // 队列长度权重40%
+    networkQualityWeight: 0.6, // 网络质量权重60%
+    adjustmentInterval: 20000, // 20秒调整一次
+    networkCheckInterval: 5000, // 5秒检查一次网络
+  }
 });
 ```
 
@@ -68,10 +90,35 @@ const status = sdk.getQueueStatus();
 console.log('队列长度:', status.queueLength);
 console.log('是否在线:', status.isOnline);
 
+// 获取自适应批量大小状态
+const adaptiveStatus = sdk.getAdaptiveBatchStatus();
+console.log('当前批量大小:', adaptiveStatus.currentBatchSize);
+console.log('网络质量:', adaptiveStatus.networkMetrics?.quality);
+console.log('发送成功率:', adaptiveStatus.recentSuccessRate);
+
+// 获取网络状况
+const networkMetrics = sdk.getNetworkMetrics();
+if (networkMetrics) {
+  console.log('网络RTT:', networkMetrics.rtt, 'ms');
+  console.log('网络带宽:', networkMetrics.bandwidth, 'bytes/s');
+  console.log('连接类型:', networkMetrics.connectionType);
+}
+
+// 手动触发网络检测
+await sdk.checkNetworkManually();
+
+// 手动触发批量大小调整
+sdk.adjustBatchSizeManually();
+
 // 动态更新配置
 sdk.updateBatchConfig({
   flushInterval: 10000, // 改为10秒刷新
-  maxBatchSize: 100     // 改为最大100个事件
+  maxBatchSize: 100,     // 改为最大100个事件
+  adaptive: {
+    enabled: true,
+    minBatchSize: 10,
+    maxBatchSize: 100
+  }
 });
 ```
 
@@ -128,6 +175,46 @@ sdk.updateBatchConfig({
 - **离线支持**: 网络断开时事件不丢失
 - **后台发送**: 不影响用户操作流畅性
 - **智能重试**: 网络恢复后自动重发
+
+## 🚀 自适应批量大小算法
+
+### 核心特性
+- **智能调整**: 根据网络状况和队列长度动态调整批量大小
+- **网络感知**: 实时检测网络RTT、带宽和连接质量
+- **队列感知**: 根据队列长度自动调整批量大小
+- **性能优化**: 网络好时增大批量，网络差时减小批量
+
+### 工作原理
+
+1. **网络状况检测**
+   - 定期检测网络RTT（往返时延）
+   - 获取连接类型（4G、3G、WiFi等）
+   - 评估网络质量（excellent/good/fair/poor）
+
+2. **批量大小计算**
+   - 基于网络质量：网络好时增大批量，网络差时减小批量
+   - 基于队列长度：队列长时增大批量快速清空，队列短时减小批量降低延迟
+   - 基于发送成功率：成功率高时适当增大，成功率低时减小
+   - 加权合并：网络质量权重70%，队列长度权重30%
+
+3. **平滑调整**
+   - 避免批量大小剧烈变化
+   - 变化超过50%时采用平滑调整策略
+   - 确保批量大小在最小和最大范围内
+
+### 网络质量评估标准
+- **excellent**: RTT < 50ms 且带宽 > 5Mbps
+- **good**: RTT < 100ms 且带宽 > 1Mbps
+- **fair**: RTT < 300ms 且带宽 > 100KBps
+- **poor**: 其他情况
+
+### 批量大小调整策略
+- **网络质量 excellent**: 批量大小 × 1.5
+- **网络质量 good**: 批量大小 × 1.2
+- **网络质量 fair**: 批量大小 × 0.8
+- **网络质量 poor**: 批量大小 × 0.5
+- **队列长度 > 100**: 批量大小 = 队列长度 × 0.3（上限为最大批量）
+- **队列长度 < 20**: 批量大小 = 队列长度 × 0.5（下限为最小批量）
 
 ## 🧪 测试
 

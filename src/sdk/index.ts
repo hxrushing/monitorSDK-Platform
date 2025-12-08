@@ -17,14 +17,44 @@ interface CommonParams {
   sdkVersion: string;
 }
 
+// 网络状况接口
+interface NetworkMetrics {
+  rtt: number;                 // 往返时延（毫秒）
+  bandwidth: number;            // 带宽估算（字节/秒）
+  connectionType: string;      // 连接类型（4g, 3g, wifi等）
+  quality: 'excellent' | 'good' | 'fair' | 'poor'; // 网络质量评级
+  lastUpdate: number;          // 最后更新时间
+}
+
+// 网络状况历史记录
+interface NetworkHistory {
+  metrics: NetworkMetrics[];
+  successRate: number;         // 发送成功率
+  avgResponseTime: number;     // 平均响应时间
+  lastFailureTime?: number;    // 最后失败时间
+}
+
+// 自适应批量大小配置
+interface AdaptiveBatchConfig {
+  enabled: boolean;             // 是否启用自适应批量大小
+  minBatchSize: number;        // 最小批量大小（默认10）
+  maxBatchSize: number;         // 最大批量大小（默认100）
+  initialBatchSize: number;      // 初始批量大小（默认50）
+  queueLengthWeight: number;    // 队列长度权重（0-1，默认0.3）
+  networkQualityWeight: number; // 网络质量权重（0-1，默认0.7）
+  adjustmentInterval: number;   // 调整间隔（毫秒，默认30000）
+  networkCheckInterval: number; // 网络检查间隔（毫秒，默认10000）
+}
+
 // 批量发送配置接口
 interface BatchConfig {
-  maxBatchSize: number;        // 最大批量大小
+  maxBatchSize: number;        // 最大批量大小（如果启用自适应，作为上限）
   flushInterval: number;        // 刷新间隔（毫秒）
   maxRetries: number;          // 最大重试次数
   retryDelay: number;          // 重试延迟（毫秒）
   enableOfflineStorage: boolean; // 是否启用离线存储
   maxStorageSize: number;      // 最大存储大小（字节）
+  adaptive?: AdaptiveBatchConfig; // 自适应批量大小配置
 }
 
 // 白屏检测配置接口
@@ -65,6 +95,20 @@ class AnalyticsSDK {
   private isOnline: boolean = navigator.onLine;
   private storageKey: string;
   
+  // 自适应批量大小相关属性
+  private currentBatchSize: number;
+  private networkMetrics: NetworkMetrics | null = null;
+  private networkHistory: NetworkHistory = {
+    metrics: [],
+    successRate: 1.0,
+    avgResponseTime: 0
+  };
+  private networkCheckTimer: NodeJS.Timeout | null = null;
+  private adjustmentTimer: NodeJS.Timeout | null = null;
+  private lastSendTime: number = 0;
+  private lastSendDuration: number = 0;
+  private recentSendResults: Array<{ success: boolean; duration: number; batchSize: number }> = [];
+  
   // 白屏检测相关属性
   private blankScreenConfig: BlankScreenConfig;
   private blankScreenCheckTimer: NodeJS.Timeout | null = null;
@@ -85,8 +129,24 @@ class AnalyticsSDK {
       retryDelay: 1000,           // 重试延迟1秒
       enableOfflineStorage: true, // 启用离线存储
       maxStorageSize: 1024 * 1024, // 最大存储1MB
+      adaptive: {
+        enabled: true,            // 默认启用自适应
+        minBatchSize: 10,         // 最小批量10个
+        maxBatchSize: 100,        // 最大批量100个
+        initialBatchSize: 50,     // 初始批量50个
+        queueLengthWeight: 0.3,   // 队列长度权重30%
+        networkQualityWeight: 0.7, // 网络质量权重70%
+        adjustmentInterval: 30000, // 30秒调整一次
+        networkCheckInterval: 10000, // 10秒检查一次网络
+        ...config?.adaptive
+      },
       ...config
     };
+
+    // 初始化当前批量大小
+    this.currentBatchSize = this.batchConfig.adaptive?.enabled 
+      ? (this.batchConfig.adaptive.initialBatchSize || this.batchConfig.maxBatchSize)
+      : this.batchConfig.maxBatchSize;
 
     // 默认白屏检测配置
     this.blankScreenConfig = {
@@ -107,6 +167,11 @@ class AnalyticsSDK {
     this.initBatchMechanism();
     this.initBlankScreenDetection();
     this.loadOfflineEvents();
+    
+    // 初始化自适应批量大小机制
+    if (this.batchConfig.adaptive?.enabled) {
+      this.initAdaptiveBatchSize();
+    }
   }
 
   public static getInstance(projectId: string, endpoint: string, config?: Partial<BatchConfig>, blankScreenConfig?: Partial<BlankScreenConfig>): AnalyticsSDK {
@@ -152,12 +217,20 @@ class AnalyticsSDK {
     window.addEventListener('online', () => {
       this.isOnline = true;
       console.log('网络已连接，开始发送离线事件');
+      // 网络恢复时立即检测网络状况
+      if (this.batchConfig.adaptive?.enabled) {
+        this.checkNetworkStatus();
+      }
       this.flushQueue();
     });
 
     window.addEventListener('offline', () => {
       this.isOnline = false;
       console.log('网络已断开，事件将存储到本地');
+      // 网络断开时重置网络指标
+      if (this.networkMetrics) {
+        this.networkMetrics.quality = 'poor';
+      }
     });
 
     // 页面卸载时发送剩余事件
@@ -174,6 +247,262 @@ class AnalyticsSDK {
 
     // 启动定时刷新
     this.startFlushTimer();
+  }
+
+  // 初始化自适应批量大小机制
+  private initAdaptiveBatchSize(): void {
+    if (!this.batchConfig.adaptive?.enabled) return;
+
+    // 初始网络检测
+    this.checkNetworkStatus();
+
+    // 启动网络状况定期检查
+    this.startNetworkCheckTimer();
+
+    // 启动批量大小调整定时器
+    this.startAdjustmentTimer();
+  }
+
+  // 启动网络检查定时器
+  private startNetworkCheckTimer(): void {
+    if (!this.batchConfig.adaptive?.enabled) return;
+
+    if (this.networkCheckTimer) {
+      clearInterval(this.networkCheckTimer);
+    }
+
+    const interval = this.batchConfig.adaptive.networkCheckInterval;
+    this.networkCheckTimer = setInterval(() => {
+      this.checkNetworkStatus();
+    }, interval);
+  }
+
+  // 启动批量大小调整定时器
+  private startAdjustmentTimer(): void {
+    if (!this.batchConfig.adaptive?.enabled) return;
+
+    if (this.adjustmentTimer) {
+      clearInterval(this.adjustmentTimer);
+    }
+
+    const interval = this.batchConfig.adaptive.adjustmentInterval;
+    this.adjustmentTimer = setInterval(() => {
+      this.adjustBatchSize();
+    }, interval);
+  }
+
+  // 停止网络检查定时器
+  private stopNetworkCheckTimer(): void {
+    if (this.networkCheckTimer) {
+      clearInterval(this.networkCheckTimer);
+      this.networkCheckTimer = null;
+    }
+  }
+
+  // 停止批量大小调整定时器
+  private stopAdjustmentTimer(): void {
+    if (this.adjustmentTimer) {
+      clearInterval(this.adjustmentTimer);
+      this.adjustmentTimer = null;
+    }
+  }
+
+  // 检测网络状况
+  private async checkNetworkStatus(): Promise<void> {
+    if (!this.isOnline) {
+      return;
+    }
+
+    try {
+      const startTime = performance.now();
+      
+      // 使用轻量级请求检测网络延迟
+      // 尝试使用 OPTIONS 请求（CORS预检），如果失败则使用小数据包测试
+      let response: Response;
+      try {
+        response = await fetch(this.endpoint, {
+          method: 'OPTIONS',
+          cache: 'no-cache',
+          signal: AbortSignal.timeout(5000) // 5秒超时
+        });
+      } catch (optionsError) {
+        // OPTIONS 失败，使用小数据包测试
+        const testData = { test: true, timestamp: Date.now() };
+        response = await fetch(this.endpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(testData),
+          cache: 'no-cache',
+          signal: AbortSignal.timeout(5000)
+        });
+      }
+
+      const endTime = performance.now();
+      const rtt = endTime - startTime;
+
+      // 获取连接类型（如果支持）
+      const connection = (navigator as any).connection || 
+                        (navigator as any).mozConnection || 
+                        (navigator as any).webkitConnection;
+
+      let connectionType = 'unknown';
+      let bandwidth = 0;
+
+      if (connection) {
+        connectionType = connection.effectiveType || connectionType;
+        // downlink 单位是 Mbps，转换为字节/秒
+        bandwidth = connection.downlink ? connection.downlink * 1024 * 1024 / 8 : 0;
+      }
+
+      // 如果没有连接信息，根据 RTT 估算带宽
+      if (bandwidth === 0) {
+        if (rtt < 50) {
+          bandwidth = 10 * 1024 * 1024; // 假设高速网络
+        } else if (rtt < 200) {
+          bandwidth = 5 * 1024 * 1024; // 假设中速网络
+        } else if (rtt < 500) {
+          bandwidth = 1 * 1024 * 1024; // 假设低速网络
+        } else {
+          bandwidth = 100 * 1024; // 假设很慢的网络
+        }
+      }
+
+      // 评估网络质量
+      const quality = this.evaluateNetworkQuality(rtt, bandwidth);
+
+      this.networkMetrics = {
+        rtt,
+        bandwidth,
+        connectionType,
+        quality,
+        lastUpdate: Date.now()
+      };
+
+      // 更新历史记录
+      this.updateNetworkHistory(this.networkMetrics);
+
+      console.log(`网络状况检测: RTT=${rtt.toFixed(2)}ms, 质量=${quality}, 类型=${connectionType}, 带宽=${(bandwidth / 1024 / 1024).toFixed(2)}Mbps`);
+    } catch (error) {
+      console.warn('网络状况检测失败:', error);
+      // 检测失败时，使用保守的网络质量评估
+      if (!this.networkMetrics) {
+        this.networkMetrics = {
+          rtt: 1000,
+          bandwidth: 100 * 1024, // 100KB/s
+          connectionType: 'unknown',
+          quality: 'poor',
+          lastUpdate: Date.now()
+        };
+      } else {
+        // 基于上次的 RTT 增加，表示网络变差
+        this.networkMetrics.rtt = Math.min(this.networkMetrics.rtt * 1.5, 5000);
+        this.networkMetrics.quality = 'poor';
+        this.networkMetrics.lastUpdate = Date.now();
+      }
+    }
+  }
+
+  // 评估网络质量
+  private evaluateNetworkQuality(rtt: number, bandwidth: number): 'excellent' | 'good' | 'fair' | 'poor' {
+    // 基于RTT和带宽评估网络质量
+    if (rtt < 50 && bandwidth > 5 * 1024 * 1024) {
+      return 'excellent';
+    } else if (rtt < 100 && bandwidth > 1 * 1024 * 1024) {
+      return 'good';
+    } else if (rtt < 300 && bandwidth > 100 * 1024) {
+      return 'fair';
+    } else {
+      return 'poor';
+    }
+  }
+
+  // 更新网络历史记录
+  private updateNetworkHistory(metrics: NetworkMetrics): void {
+    this.networkHistory.metrics.push(metrics);
+    
+    // 只保留最近50条记录
+    if (this.networkHistory.metrics.length > 50) {
+      this.networkHistory.metrics.shift();
+    }
+
+    // 计算平均RTT
+    const avgRtt = this.networkHistory.metrics.reduce((sum, m) => sum + m.rtt, 0) / this.networkHistory.metrics.length;
+    this.networkHistory.avgResponseTime = avgRtt;
+  }
+
+  // 根据网络状况和队列长度调整批量大小
+  private adjustBatchSize(): void {
+    if (!this.batchConfig.adaptive?.enabled) return;
+
+    const config = this.batchConfig.adaptive;
+    const queueLength = this.eventQueue.length;
+
+    // 基于网络质量的批量大小调整
+    let networkBasedSize = config.initialBatchSize;
+    if (this.networkMetrics) {
+      const qualityMultiplier = {
+        excellent: 1.5,
+        good: 1.2,
+        fair: 0.8,
+        poor: 0.5
+      };
+      networkBasedSize = Math.round(config.initialBatchSize * qualityMultiplier[this.networkMetrics.quality]);
+    }
+
+    // 基于队列长度的批量大小调整
+    let queueBasedSize = config.initialBatchSize;
+    if (queueLength > 100) {
+      // 队列很长，增加批量大小以快速清空
+      queueBasedSize = Math.min(config.maxBatchSize, Math.round(queueLength * 0.3));
+    } else if (queueLength < 20) {
+      // 队列很短，减少批量大小以降低延迟
+      queueBasedSize = Math.max(config.minBatchSize, Math.round(queueLength * 0.5));
+    }
+
+    // 基于发送成功率的调整
+    if (this.recentSendResults.length > 0) {
+      const successRate = this.recentSendResults.filter(r => r.success).length / this.recentSendResults.length;
+      const avgDuration = this.recentSendResults.reduce((sum, r) => sum + r.duration, 0) / this.recentSendResults.length;
+
+      // 如果成功率低或响应时间长，减少批量大小
+      if (successRate < 0.8 || avgDuration > 2000) {
+        networkBasedSize = Math.round(networkBasedSize * 0.7);
+      } else if (successRate > 0.95 && avgDuration < 500) {
+        // 如果成功率高且响应快，可以适当增加
+        networkBasedSize = Math.round(networkBasedSize * 1.1);
+      }
+    }
+
+    // 加权合并网络质量和队列长度的影响
+    const newBatchSize = Math.round(
+      networkBasedSize * config.networkQualityWeight + 
+      queueBasedSize * config.queueLengthWeight
+    );
+
+    // 限制在最小和最大范围内
+    const adjustedSize = Math.max(
+      config.minBatchSize,
+      Math.min(config.maxBatchSize, newBatchSize)
+    );
+
+    // 平滑调整，避免剧烈变化
+    const changeRatio = adjustedSize / this.currentBatchSize;
+    if (changeRatio > 1.5 || changeRatio < 0.67) {
+      // 变化超过50%，平滑调整
+      this.currentBatchSize = Math.round(this.currentBatchSize * (1 + (changeRatio - 1) * 0.3));
+    } else {
+      this.currentBatchSize = adjustedSize;
+    }
+
+    // 确保在范围内
+    this.currentBatchSize = Math.max(
+      config.minBatchSize,
+      Math.min(config.maxBatchSize, this.currentBatchSize)
+    );
+
+    console.log(`批量大小调整: ${this.currentBatchSize} (队列: ${queueLength}, 网络质量: ${this.networkMetrics?.quality || 'unknown'})`);
   }
 
   // 启动定时刷新器
@@ -217,7 +546,11 @@ class AnalyticsSDK {
     console.log(`事件已添加到队列，当前队列长度: ${this.eventQueue.length}`);
 
     // 如果达到批量大小限制，立即发送
-    if (this.eventQueue.length >= this.batchConfig.maxBatchSize) {
+    const batchSize = this.batchConfig.adaptive?.enabled 
+      ? this.currentBatchSize 
+      : this.batchConfig.maxBatchSize;
+    
+    if (this.eventQueue.length >= batchSize) {
       this.flushQueue();
     }
   }
@@ -232,14 +565,24 @@ class AnalyticsSDK {
       return;
     }
 
+    // 确定批量大小（使用自适应或固定值）
+    const batchSize = this.batchConfig.adaptive?.enabled 
+      ? this.currentBatchSize 
+      : this.batchConfig.maxBatchSize;
+
     // 准备批量发送的数据
-    const eventsToSend = this.eventQueue.splice(0, this.batchConfig.maxBatchSize);
+    const eventsToSend = this.eventQueue.splice(0, batchSize);
+    const sendStartTime = performance.now();
     
     try {
       const response = await this.sendBatch(eventsToSend);
+      const sendDuration = performance.now() - sendStartTime;
       
       if (response.success) {
-        console.log(`批量发送成功，处理了 ${response.processedCount} 个事件`);
+        console.log(`批量发送成功，处理了 ${response.processedCount} 个事件，耗时 ${sendDuration.toFixed(2)}ms`);
+        
+        // 记录发送结果（用于自适应调整）
+        this.recordSendResult(true, sendDuration, eventsToSend.length);
         
         // 处理失败的事件
         if (response.failedEvents && response.failedEvents.length > 0) {
@@ -249,12 +592,39 @@ class AnalyticsSDK {
         // 发送失败，重新加入队列
         this.eventQueue.unshift(...eventsToSend);
         this.handleFailedEvents(eventsToSend);
+        this.recordSendResult(false, sendDuration, eventsToSend.length);
       }
     } catch (error) {
+      const sendDuration = performance.now() - sendStartTime;
       console.error('批量发送失败:', error);
       // 发送失败，重新加入队列
       this.eventQueue.unshift(...eventsToSend);
       this.handleFailedEvents(eventsToSend);
+      this.recordSendResult(false, sendDuration, eventsToSend.length);
+    }
+  }
+
+  // 记录发送结果（用于自适应调整）
+  private recordSendResult(success: boolean, duration: number, batchSize: number): void {
+    if (!this.batchConfig.adaptive?.enabled) return;
+
+    this.recentSendResults.push({ success, duration, batchSize });
+    
+    // 只保留最近20条记录
+    if (this.recentSendResults.length > 20) {
+      this.recentSendResults.shift();
+    }
+
+    // 更新网络历史成功率
+    const successCount = this.recentSendResults.filter(r => r.success).length;
+    this.networkHistory.successRate = successCount / this.recentSendResults.length;
+
+    // 如果连续失败，立即触发调整
+    const recentFailures = this.recentSendResults.slice(-3).filter(r => !r.success).length;
+    if (recentFailures >= 3) {
+      this.networkHistory.lastFailureTime = Date.now();
+      // 立即调整批量大小
+      this.adjustBatchSize();
     }
   }
 
@@ -401,11 +771,66 @@ class AnalyticsSDK {
 
   // 更新批量配置（公开方法）
   public updateBatchConfig(newConfig: Partial<BatchConfig>): void {
+    const wasAdaptiveEnabled = this.batchConfig.adaptive?.enabled;
+    
     this.batchConfig = { ...this.batchConfig, ...newConfig };
     
-    // 重启定时器
+    // 如果自适应配置更新，需要重新初始化
+    if (newConfig.adaptive !== undefined) {
+      if (this.batchConfig.adaptive?.enabled && !wasAdaptiveEnabled) {
+        // 从禁用变为启用
+        this.initAdaptiveBatchSize();
+      } else if (!this.batchConfig.adaptive?.enabled && wasAdaptiveEnabled) {
+        // 从启用变为禁用
+        this.stopNetworkCheckTimer();
+        this.stopAdjustmentTimer();
+        this.currentBatchSize = this.batchConfig.maxBatchSize;
+      } else if (this.batchConfig.adaptive?.enabled) {
+        // 配置更新，重启定时器
+        this.stopNetworkCheckTimer();
+        this.stopAdjustmentTimer();
+        this.startNetworkCheckTimer();
+        this.startAdjustmentTimer();
+      }
+    }
+    
+    // 重启刷新定时器
     this.stopFlushTimer();
     this.startFlushTimer();
+  }
+
+  // 获取网络状况（公开方法）
+  public getNetworkMetrics(): NetworkMetrics | null {
+    return this.networkMetrics ? { ...this.networkMetrics } : null;
+  }
+
+  // 获取自适应批量大小状态（公开方法）
+  public getAdaptiveBatchStatus(): {
+    enabled: boolean;
+    currentBatchSize: number;
+    networkMetrics: NetworkMetrics | null;
+    queueLength: number;
+    recentSuccessRate: number;
+  } {
+    return {
+      enabled: this.batchConfig.adaptive?.enabled || false,
+      currentBatchSize: this.currentBatchSize,
+      networkMetrics: this.getNetworkMetrics(),
+      queueLength: this.eventQueue.length,
+      recentSuccessRate: this.networkHistory.successRate
+    };
+  }
+
+  // 手动触发批量大小调整（公开方法）
+  public adjustBatchSizeManually(): void {
+    if (this.batchConfig.adaptive?.enabled) {
+      this.adjustBatchSize();
+    }
+  }
+
+  // 手动触发网络检测（公开方法）
+  public checkNetworkManually(): Promise<void> {
+    return this.checkNetworkStatus();
   }
 
   public track(eventName: string, eventParams?: Record<string, any>, priority: 'high' | 'normal' | 'low' = 'normal') {
