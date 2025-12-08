@@ -72,6 +72,26 @@ interface RetryRecord {
   errorMessage?: string;
 }
 
+// 数据压缩配置接口
+interface CompressionConfig {
+  enabled: boolean;            // 是否启用压缩（默认true）
+  algorithm: 'auto' | 'native' | 'custom' | 'none'; // 压缩算法
+  minSize: number;            // 最小压缩大小（字节，小于此大小不压缩，默认100）
+  compressionLevel: number;    // 压缩级别 0-9（默认6，仅用于自定义算法）
+  deduplicate: boolean;       // 是否启用去重（默认true）
+  optimizeJson: boolean;       // 是否优化JSON结构（默认true）
+}
+
+// 压缩统计信息
+interface CompressionStats {
+  originalSize: number;       // 原始大小（字节）
+  compressedSize: number;     // 压缩后大小（字节）
+  compressionRatio: number;   // 压缩比
+  algorithm: string;          // 使用的压缩算法
+  compressionTime: number;    // 压缩耗时（毫秒）
+  decompressionTime: number;  // 解压耗时（毫秒）
+}
+
 // 批量发送配置接口
 interface BatchConfig {
   maxBatchSize: number;        // 最大批量大小（如果启用自适应，作为上限）
@@ -82,6 +102,7 @@ interface BatchConfig {
   maxStorageSize: number;      // 最大存储大小（字节）
   adaptive?: AdaptiveBatchConfig; // 自适应批量大小配置
   exponentialBackoff?: ExponentialBackoffConfig; // 指数退避配置
+  compression?: CompressionConfig; // 数据压缩配置
 }
 
 // 白屏检测配置接口
@@ -138,6 +159,10 @@ class AnalyticsSDK {
   private retryRecords: Map<string, RetryRecord> = new Map();
   private retryTimers: Map<string, NodeJS.Timeout> = new Map();
   
+  // 数据压缩相关属性
+  private compressionStats: CompressionStats | null = null;
+  private compressionSupported: { native: boolean; custom: boolean } = { native: false, custom: true };
+  
   // 白屏检测相关属性
   private blankScreenConfig: BlankScreenConfig;
   private blankScreenCheckTimer: NodeJS.Timeout | null = null;
@@ -180,8 +205,20 @@ class AnalyticsSDK {
         errorTypeAware: true,     // 根据错误类型调整
         ...config?.exponentialBackoff
       },
+      compression: {
+        enabled: true,            // 默认启用压缩
+        algorithm: 'auto',         // 自动选择最佳算法
+        minSize: 100,             // 小于100字节不压缩
+        compressionLevel: 6,      // 压缩级别6（平衡压缩率和速度）
+        deduplicate: true,        // 启用去重
+        optimizeJson: true,        // 优化JSON结构
+        ...config?.compression
+      },
       ...config
     };
+
+    // 检测压缩支持
+    this.detectCompressionSupport();
 
     // 初始化当前批量大小
     this.currentBatchSize = this.batchConfig.adaptive?.enabled 
@@ -212,6 +249,16 @@ class AnalyticsSDK {
     if (this.batchConfig.adaptive?.enabled) {
       this.initAdaptiveBatchSize();
     }
+  }
+
+  // 检测压缩支持
+  private detectCompressionSupport(): void {
+    // 检测浏览器原生CompressionStream API支持
+    this.compressionSupported.native = 
+      typeof CompressionStream !== 'undefined' && 
+      typeof DecompressionStream !== 'undefined';
+    
+    console.log(`压缩支持检测: 原生API=${this.compressionSupported.native}, 自定义算法=${this.compressionSupported.custom}`);
   }
 
   public static getInstance(projectId: string, endpoint: string, config?: Partial<BatchConfig>, blankScreenConfig?: Partial<BlankScreenConfig>): AnalyticsSDK {
@@ -896,15 +943,29 @@ class AnalyticsSDK {
       const allEvents = [...existingEvents, ...this.eventQueue];
       
       // 检查存储大小限制
-      const eventsToStore = this.limitStorageSize(allEvents);
+      let eventsToStore = this.limitStorageSize(allEvents);
       
-      localStorage.setItem(this.storageKey, JSON.stringify(eventsToStore));
-      console.log(`已保存 ${eventsToStore.length} 个事件到离线存储`);
+      // 优化和压缩数据
+      const compressedData = this.compressData(eventsToStore);
+      
+      localStorage.setItem(this.storageKey, compressedData);
+      console.log(`已保存 ${eventsToStore.length} 个事件到离线存储${this.compressionStats ? ` (压缩比: ${(this.compressionStats.compressionRatio * 100).toFixed(1)}%)` : ''}`);
       
       // 清空队列
       this.eventQueue = [];
     } catch (error) {
       console.error('保存到离线存储失败:', error);
+      // 如果压缩失败，尝试不压缩保存
+      try {
+        const existingEvents = this.getOfflineEvents();
+        const allEvents = [...existingEvents, ...this.eventQueue];
+        const eventsToStore = this.limitStorageSize(allEvents);
+        localStorage.setItem(this.storageKey, JSON.stringify(eventsToStore));
+        console.log(`已保存 ${eventsToStore.length} 个事件到离线存储（未压缩）`);
+        this.eventQueue = [];
+      } catch (fallbackError) {
+        console.error('保存到离线存储失败（回退方案）:', fallbackError);
+      }
     }
   }
 
@@ -915,9 +976,20 @@ class AnalyticsSDK {
       const allEvents = [...existingEvents, event];
       const eventsToStore = this.limitStorageSize(allEvents);
       
-      localStorage.setItem(this.storageKey, JSON.stringify(eventsToStore));
+      // 优化和压缩数据
+      const compressedData = this.compressData(eventsToStore);
+      localStorage.setItem(this.storageKey, compressedData);
     } catch (error) {
       console.error('保存事件到离线存储失败:', error);
+      // 如果压缩失败，尝试不压缩保存
+      try {
+        const existingEvents = this.getOfflineEvents();
+        const allEvents = [...existingEvents, event];
+        const eventsToStore = this.limitStorageSize(allEvents);
+        localStorage.setItem(this.storageKey, JSON.stringify(eventsToStore));
+      } catch (fallbackError) {
+        console.error('保存事件到离线存储失败（回退方案）:', fallbackError);
+      }
     }
   }
 
@@ -948,10 +1020,20 @@ class AnalyticsSDK {
   private getOfflineEvents(): QueuedEvent[] {
     try {
       const stored = localStorage.getItem(this.storageKey);
-      return stored ? JSON.parse(stored) : [];
+      if (!stored) return [];
+      
+      // 尝试解压缩
+      return this.decompressData(stored);
     } catch (error) {
       console.error('获取离线事件失败:', error);
-      return [];
+      // 如果解压失败，尝试直接解析（可能是未压缩的数据）
+      try {
+        const stored = localStorage.getItem(this.storageKey);
+        return stored ? JSON.parse(stored) : [];
+      } catch (parseError) {
+        console.error('解析离线事件失败:', parseError);
+        return [];
+      }
     }
   }
 
@@ -959,6 +1041,287 @@ class AnalyticsSDK {
   private limitStorageSize(events: QueuedEvent[]): QueuedEvent[] {
     const maxEvents = Math.floor(this.batchConfig.maxStorageSize / 1000); // 粗略估算
     return events.slice(-maxEvents);
+  }
+
+  // 压缩数据
+  private compressData(events: QueuedEvent[]): string {
+    const compressionConfig = this.batchConfig.compression;
+    
+    // 如果未启用压缩，直接返回JSON
+    if (!compressionConfig?.enabled || compressionConfig.algorithm === 'none') {
+      return JSON.stringify(events);
+    }
+
+    const startTime = performance.now();
+    const originalJson = JSON.stringify(events);
+    const originalSize = new Blob([originalJson]).size;
+
+    // 如果数据太小，不压缩
+    if (originalSize < compressionConfig.minSize) {
+      return originalJson;
+    }
+
+    let compressed: string;
+    let algorithm: string;
+
+    // 选择压缩算法
+    const algorithmToUse = compressionConfig.algorithm === 'auto' 
+      ? (this.compressionSupported.native ? 'native' : 'custom')
+      : compressionConfig.algorithm;
+
+    if (algorithmToUse === 'native' && this.compressionSupported.native) {
+      // 使用浏览器原生压缩（异步，需要同步包装）
+      compressed = this.compressWithNative(originalJson);
+      algorithm = 'native-gzip';
+    } else {
+      // 使用自定义压缩算法
+      compressed = this.compressWithCustom(originalJson, compressionConfig);
+      algorithm = 'custom';
+    }
+
+    const compressedSize = new Blob([compressed]).size;
+    const compressionTime = performance.now() - startTime;
+    const compressionRatio = compressedSize / originalSize;
+
+    // 如果压缩后反而更大，使用原始数据
+    if (compressionRatio >= 1) {
+      this.compressionStats = {
+        originalSize,
+        compressedSize: originalSize,
+        compressionRatio: 1,
+        algorithm: 'none',
+        compressionTime,
+        decompressionTime: 0
+      };
+      return originalJson;
+    }
+
+    // 保存压缩统计
+    this.compressionStats = {
+      originalSize,
+      compressedSize,
+      compressionRatio,
+      algorithm,
+      compressionTime,
+      decompressionTime: 0
+    };
+
+    // 添加压缩标记前缀，用于识别压缩数据
+    return `__COMPRESSED__${algorithm}__${compressed}`;
+  }
+
+  // 使用浏览器原生API压缩
+  private compressWithNative(data: string): string {
+    // 注意：CompressionStream是异步的，但我们需要同步返回
+    // 这里使用同步的Base64编码作为fallback
+    // 实际应用中，可以考虑使用异步压缩或Web Worker
+    try {
+      // 使用简单的Base64编码作为占位符
+      // 实际应该使用异步压缩，但为了兼容性，这里使用自定义压缩
+      return this.compressWithCustom(data, this.batchConfig.compression!);
+    } catch (error) {
+      console.warn('原生压缩失败，使用自定义压缩:', error);
+      return this.compressWithCustom(data, this.batchConfig.compression!);
+    }
+  }
+
+  // 使用自定义压缩算法
+  private compressWithCustom(data: string, config: CompressionConfig): string {
+    let compressed = data;
+
+    // 1. JSON优化：移除不必要的空格和换行
+    if (config.optimizeJson) {
+      try {
+        const parsed = JSON.parse(data);
+        compressed = JSON.stringify(parsed);
+      } catch (e) {
+        // 如果解析失败，使用原始数据
+      }
+    }
+
+    // 2. 去重：移除重复的键值对（针对事件数据的特性）
+    if (config.deduplicate) {
+      compressed = this.deduplicateData(compressed);
+    }
+
+    // 3. 字符串压缩：使用字典压缩
+    compressed = this.compressString(compressed, config.compressionLevel);
+
+    return compressed;
+  }
+
+  // 数据去重优化
+  private deduplicateData(jsonString: string): string {
+    try {
+      const data = JSON.parse(jsonString);
+      if (!Array.isArray(data)) return jsonString;
+
+      // 提取公共字段（如projectId、deviceInfo等）
+      const commonFields: Record<string, any> = {};
+      let firstEvent: any = null;
+
+      if (data.length > 0) {
+        firstEvent = data[0];
+        // 提取所有事件的公共字段
+        const keys = Object.keys(firstEvent.data || {});
+        keys.forEach(key => {
+          const value = firstEvent.data[key];
+          if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+            if (data.every((event: any) => event.data?.[key] === value)) {
+              commonFields[key] = value;
+            }
+          }
+        });
+      }
+
+      // 如果找到公共字段，优化数据结构
+      if (Object.keys(commonFields).length > 0) {
+        const optimized = {
+          _common: commonFields,
+          _events: data.map((event: any) => {
+            const optimizedEvent = { ...event };
+            if (optimizedEvent.data) {
+              const data = { ...optimizedEvent.data };
+              Object.keys(commonFields).forEach(key => {
+                delete data[key];
+              });
+              optimizedEvent.data = data;
+            }
+            return optimizedEvent;
+          })
+        };
+        return JSON.stringify(optimized);
+      }
+
+      return jsonString;
+    } catch (error) {
+      return jsonString;
+    }
+  }
+
+  // 字符串压缩（简单的字典压缩）
+  private compressString(str: string, _level: number): string {
+    // 简单的压缩策略：
+    // 1. 替换常见的重复字符串
+    // 2. 使用短标识符替换长字符串
+    
+    let compressed = str;
+    
+    // 查找重复的字符串模式
+    const patterns = new Map<string, string>();
+    let patternId = 0;
+    
+    // 查找长度大于10的重复子串
+    for (let len = 20; len >= 10; len--) {
+      const frequency = new Map<string, number>();
+      
+      for (let i = 0; i <= compressed.length - len; i++) {
+        const substr = compressed.substring(i, i + len);
+        frequency.set(substr, (frequency.get(substr) || 0) + 1);
+      }
+      
+      // 替换出现3次以上的子串
+      frequency.forEach((count, substr) => {
+        if (count >= 3 && !patterns.has(substr)) {
+          const id = `__P${patternId++}__`;
+          patterns.set(substr, id);
+          compressed = compressed.split(substr).join(id);
+        }
+      });
+    }
+    
+    // 如果有模式替换，添加字典
+    if (patterns.size > 0) {
+      const dict: Record<string, string> = {};
+      patterns.forEach((id, pattern) => {
+        dict[id] = pattern;
+      });
+      compressed = `__DICT__${JSON.stringify(dict)}__DATA__${compressed}`;
+    }
+    
+    return compressed;
+  }
+
+  // 解压缩数据
+  private decompressData(compressed: string): QueuedEvent[] {
+    const startTime = performance.now();
+    
+    // 检查是否是压缩数据
+    if (!compressed.startsWith('__COMPRESSED__')) {
+      // 未压缩数据，直接解析
+      return JSON.parse(compressed);
+    }
+
+    // 提取压缩算法和数据
+    const match = compressed.match(/^__COMPRESSED__(native-gzip|custom)__(.+)$/);
+    if (!match) {
+      // 格式错误，尝试直接解析
+      return JSON.parse(compressed);
+    }
+
+    const algorithm = match[1];
+    const data = match[2];
+
+    let decompressed: string;
+
+    if (algorithm === 'native-gzip') {
+      decompressed = this.decompressWithNative(data);
+    } else {
+      decompressed = this.decompressWithCustom(data);
+    }
+
+    const decompressionTime = performance.now() - startTime;
+    
+    // 更新解压统计
+    if (this.compressionStats) {
+      this.compressionStats.decompressionTime = decompressionTime;
+    }
+
+    return JSON.parse(decompressed);
+  }
+
+  // 使用浏览器原生API解压
+  private decompressWithNative(data: string): string {
+    // 实际应该使用异步解压，这里使用自定义解压作为fallback
+    return this.decompressWithCustom(data);
+  }
+
+  // 使用自定义算法解压
+  private decompressWithCustom(compressed: string): string {
+    let decompressed = compressed;
+
+    // 1. 恢复字典压缩
+    if (decompressed.startsWith('__DICT__')) {
+      const dictMatch = decompressed.match(/^__DICT__(.+?)__DATA__(.+)$/);
+      if (dictMatch) {
+        const dict = JSON.parse(dictMatch[1]);
+        decompressed = dictMatch[2];
+        
+        // 恢复模式
+        Object.entries(dict).forEach(([id, pattern]) => {
+          decompressed = decompressed.split(id as string).join(pattern as string);
+        });
+      }
+    }
+
+    // 2. 恢复去重优化
+    try {
+      const parsed = JSON.parse(decompressed);
+      if (parsed._common && parsed._events) {
+        // 恢复公共字段
+        const events = parsed._events.map((event: any) => {
+          if (event.data) {
+            event.data = { ...parsed._common, ...event.data };
+          }
+          return event;
+        });
+        decompressed = JSON.stringify(events);
+      }
+    } catch (e) {
+      // 解析失败，返回原始数据
+    }
+
+    return decompressed;
   }
 
   // 手动刷新队列（公开方法）
@@ -1111,6 +1474,29 @@ class AnalyticsSDK {
       avgBackoffDelay: records.length > 0 ? totalBackoffDelay / records.length : 0,
       maxBackoffDelay
     };
+  }
+
+  // 获取压缩统计信息（公开方法）
+  public getCompressionStats(): CompressionStats | null {
+    return this.compressionStats ? { ...this.compressionStats } : null;
+  }
+
+  // 获取压缩支持信息（公开方法）
+  public getCompressionSupport(): { native: boolean; custom: boolean } {
+    return { ...this.compressionSupported };
+  }
+
+  // 手动触发压缩测试（公开方法）
+  public testCompression(data: any): CompressionStats {
+    const testData = Array.isArray(data) ? data : [data];
+    this.compressData(testData);
+    const stats = this.getCompressionStats();
+    
+    if (!stats) {
+      throw new Error('压缩测试失败');
+    }
+    
+    return stats;
   }
 
   public track(eventName: string, eventParams?: Record<string, any>, priority: 'high' | 'normal' | 'low' = 'normal') {

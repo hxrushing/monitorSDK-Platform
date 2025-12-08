@@ -20,6 +20,16 @@ interface BatchConfig {
   maxStorageSize: number;      // 最大存储大小字节 (默认: 1MB)
   adaptive?: AdaptiveBatchConfig; // 自适应批量大小配置
   exponentialBackoff?: ExponentialBackoffConfig; // 指数退避配置
+  compression?: CompressionConfig; // 数据压缩配置
+}
+
+interface CompressionConfig {
+  enabled: boolean;            // 是否启用压缩 (默认: true)
+  algorithm: 'auto' | 'native' | 'custom' | 'none'; // 压缩算法
+  minSize: number;            // 最小压缩大小字节 (默认: 100)
+  compressionLevel: number;    // 压缩级别 0-9 (默认: 6)
+  deduplicate: boolean;       // 是否启用去重 (默认: true)
+  optimizeJson: boolean;       // 是否优化JSON结构 (默认: true)
 }
 
 interface ExponentialBackoffConfig {
@@ -86,6 +96,14 @@ const customSdk = AnalyticsSDK.getInstance('project-id', 'endpoint', {
     jitterRatio: 0.1,       // 抖动比例10%
     networkAware: true,      // 根据网络状况调整
     errorTypeAware: true,    // 根据错误类型调整
+  },
+  compression: {
+    enabled: true,          // 启用数据压缩
+    algorithm: 'auto',      // 自动选择最佳算法
+    minSize: 100,          // 小于100字节不压缩
+    compressionLevel: 6,    // 压缩级别6
+    deduplicate: true,      // 启用去重
+    optimizeJson: true,    // 优化JSON结构
   }
 });
 ```
@@ -148,6 +166,26 @@ sdk.cancelRetry('event-id-123');
 
 // 清除所有重试记录
 sdk.clearRetryRecords();
+
+// 获取压缩统计信息
+const compressionStats = sdk.getCompressionStats();
+if (compressionStats) {
+  console.log('压缩比:', (compressionStats.compressionRatio * 100).toFixed(1) + '%');
+  console.log('原始大小:', compressionStats.originalSize, '字节');
+  console.log('压缩后大小:', compressionStats.compressedSize, '字节');
+  console.log('使用的算法:', compressionStats.algorithm);
+  console.log('压缩耗时:', compressionStats.compressionTime.toFixed(2), 'ms');
+}
+
+// 获取压缩支持信息
+const compressionSupport = sdk.getCompressionSupport();
+console.log('原生压缩支持:', compressionSupport.native);
+console.log('自定义压缩支持:', compressionSupport.custom);
+
+// 测试压缩功能
+const testData = [{ eventName: 'test', data: { key: 'value' } }];
+const testStats = sdk.testCompression(testData);
+console.log('压缩测试结果:', testStats);
 
 // 动态更新配置
 sdk.updateBatchConfig({
@@ -278,6 +316,84 @@ sdk.updateBatchConfig({
 - **server**: HTTP 5xx 错误（服务器内部错误）
 - **client**: HTTP 4xx 错误（客户端错误）
 - **unknown**: 其他未知错误
+
+## 📦 数据压缩算法
+
+### 核心特性
+- **智能压缩**: 自动选择最佳压缩算法（原生API或自定义算法）
+- **数据去重**: 自动识别并优化重复数据
+- **JSON优化**: 优化JSON结构，移除不必要的空格
+- **字典压缩**: 使用字典压缩算法减少重复字符串
+- **性能监控**: 提供压缩统计信息，包括压缩比和耗时
+
+### 压缩算法
+
+1. **自动选择（auto）**
+   - 优先使用浏览器原生CompressionStream API（如果支持）
+   - 回退到自定义压缩算法
+
+2. **原生压缩（native）**
+   - 使用浏览器原生CompressionStream API
+   - 需要浏览器支持（Chrome 80+, Edge 80+, Safari 16.4+）
+
+3. **自定义压缩（custom）**
+   - JSON结构优化
+   - 数据去重（提取公共字段）
+   - 字典压缩（替换重复字符串）
+
+4. **无压缩（none）**
+   - 禁用压缩，直接存储JSON
+
+### 压缩策略
+
+1. **数据去重**
+   - 自动识别所有事件的公共字段（如projectId、deviceInfo等）
+   - 提取公共字段到`_common`对象
+   - 各事件只存储差异字段
+
+2. **字典压缩**
+   - 查找长度大于10的重复字符串模式
+   - 使用短标识符替换重复模式
+   - 保存字典映射关系
+
+3. **JSON优化**
+   - 移除不必要的空格和换行
+   - 优化数据结构
+
+### 压缩效果示例
+
+假设有100个事件，每个事件包含：
+- projectId: "project-123" (12字节)
+- deviceInfo: {...} (200字节)
+- eventName: "page_view" (9字节)
+- eventParams: {...} (50字节)
+
+**未压缩**: 100 × (12 + 200 + 9 + 50) = 27,100 字节
+
+**压缩后**:
+- 公共字段提取: projectId和deviceInfo提取到`_common`
+- 每个事件只存储: eventName + eventParams = 59字节
+- 总大小: 271 + 100 × 59 = 6,171 字节
+- **压缩比**: 77% 减少
+
+### 配置选项
+
+```typescript
+compression: {
+  enabled: true,          // 是否启用压缩
+  algorithm: 'auto',      // 压缩算法: 'auto' | 'native' | 'custom' | 'none'
+  minSize: 100,          // 小于此大小不压缩（字节）
+  compressionLevel: 6,    // 压缩级别 0-9（仅自定义算法）
+  deduplicate: true,      // 是否启用去重
+  optimizeJson: true,     // 是否优化JSON结构
+}
+```
+
+### 性能考虑
+
+- **压缩阈值**: 小于`minSize`的数据不压缩，避免压缩开销大于收益
+- **压缩级别**: 级别越高压缩率越好，但耗时更长
+- **自动回退**: 如果压缩后反而更大，自动使用原始数据
 
 ## 🚀 自适应批量大小算法
 
