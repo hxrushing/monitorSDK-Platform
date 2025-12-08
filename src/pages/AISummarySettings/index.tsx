@@ -114,6 +114,9 @@ const AISummarySettings: React.FC = () => {
         return;
       }
 
+      // 提示用户该操作可能需要较长时间
+      message.info('正在生成并发送总结，数据量较大时可能需要1-2分钟，请耐心等待...', 5);
+      
       setSending(true);
       const result = await apiService.sendAISummaryNow();
       if (result.success) {
@@ -123,7 +126,12 @@ const AISummarySettings: React.FC = () => {
       }
     } catch (error: any) {
       console.error('发送总结失败:', error);
-      message.error(error?.response?.data?.error || '发送失败，请检查邮件配置');
+      // 如果是超时错误，给出更友好的提示
+      if (error?.code === 'ECONNABORTED' || error?.message?.includes('timeout')) {
+        message.error('处理超时，数据量较大。请稍后重试，或减少项目数量后重试');
+      } else {
+        message.error(error?.response?.data?.error || '发送失败，请检查邮件配置');
+      }
     } finally {
       setSending(false);
     }

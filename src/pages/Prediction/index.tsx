@@ -109,6 +109,13 @@ const Prediction: React.FC = () => {
       const currentMetricType = metricType;
       console.log('发送预测请求，指标类型:', currentMetricType);
       
+      // 在开始新预测前，先清除当前指标的旧结果，确保图表刷新
+      setPredictionResults(prev => {
+        const newResults = { ...prev };
+        delete newResults[currentMetricType];
+        return newResults;
+      });
+      
       const result = await apiService.predict({
         projectId: selectedProjectId,
         metricType: currentMetricType,
@@ -122,6 +129,7 @@ const Prediction: React.FC = () => {
       
       if (result.success) {
         console.log('预测成功，指标类型:', result.metricType, '存储key:', currentMetricType);
+        // 使用函数式更新，确保使用最新的状态
         setPredictionResults(prev => ({
           ...prev,
           [currentMetricType]: result  // 使用currentMetricType确保使用正确的key
@@ -191,11 +199,25 @@ const Prediction: React.FC = () => {
       return [];
     }
 
-    const historical = result.historicalData.map(item => ({
-      date: item.date,
-      value: item[result.metricType as 'pv' | 'uv'] || 0,
-      type: '历史数据'
-    }));
+    const historical = result.historicalData.map(item => {
+      let value = 0;
+      
+      if (result.metricType === 'conversion_rate') {
+        // 转化率 = UV / PV
+        const pv = item.pv || 0;
+        const uv = item.uv || 0;
+        value = pv > 0 ? uv / pv : 0;
+      } else {
+        // PV 或 UV 直接取值
+        value = item[result.metricType as 'pv' | 'uv'] || 0;
+      }
+      
+      return {
+        date: item.date,
+        value: value,
+        type: '历史数据'
+      };
+    });
 
     const predictions = result.predictions.map(item => ({
       date: item.date,
@@ -211,7 +233,7 @@ const Prediction: React.FC = () => {
     const names: Record<string, string> = {
       pv: 'PV（页面访问量）',
       uv: 'UV（独立访客）',
-      conversion_rate: '转化率'
+      conversion_rate: '独立访客率（UV/PV）'
     };
     return names[metric] || metric;
   };
@@ -320,12 +342,20 @@ const Prediction: React.FC = () => {
               onChange={(value) => {
                 console.log('切换预测指标:', value);
                 setMetricType(value);
+                // 切换指标时，清除该指标的旧预测结果，确保图表刷新
+                setPredictionResults(prev => {
+                  const newResults = { ...prev };
+                  // 只清除当前切换到的指标的结果，保留其他指标的结果
+                  // 如果用户想对比不同指标，可以保留；如果想只看当前指标，可以删除这行
+                  // delete newResults[value];
+                  return newResults;
+                });
               }}
               style={{ width: '100%' }}
             >
               <Option value="pv">PV（页面访问量）</Option>
               <Option value="uv">UV（独立访客）</Option>
-              <Option value="conversion_rate">转化率</Option>
+              <Option value="conversion_rate">独立访客率（UV/PV）</Option>
             </Select>
           </Col>
           <Col span={6}>
@@ -440,80 +470,87 @@ const Prediction: React.FC = () => {
         </Card>
       )}
 
-      {/* 单个指标预测结果 */}
-      {Object.entries(predictionResults).map(([metric, result]) => {
-        if (!result.success) return null;
+      {/* 检查当前指标和模型组合是否有预测结果 */}
+      {!batchResults && (() => {
+        const currentResult = predictionResults[metricType];
+        const hasCurrentResult = currentResult?.success && currentResult?.modelType === modelType;
 
-        const chartData = prepareChartData(result);
-        // 使用当前循环的metric，而不是外部的metricType状态
-        const predictionColumns = getPredictionColumns(metric);
+        // 如果有当前指标和模型组合的结果，显示结果
+        if (hasCurrentResult) {
+          const result = currentResult;
+          const chartData = prepareChartData(result);
+          const predictionColumns = getPredictionColumns(metricType);
 
+          return (
+            <Card
+              key={`${metricType}-${modelType}`}
+              title={
+                <Space>
+                  <LineChartOutlined />
+                  <span>{getMetricName(metricType)} - {result.modelType.toUpperCase()}模型预测结果</span>
+                  <Badge count={result.predictions.length} style={{ backgroundColor: '#52c41a' }} />
+                </Space>
+              }
+              style={{ marginBottom: 16 }}
+            >
+              <Row gutter={16}>
+                <Col span={16}>
+                  <Suspense fallback={<Spin />}>
+                    <Line
+                      key={`chart-${metricType}-${result.modelType}`}
+                      data={chartData}
+                      xField="date"
+                      yField="value"
+                      seriesField="type"
+                      smooth
+                      height={300}
+                      point={{
+                        size: 4,
+                      }}
+                      legend={{
+                        position: 'top-right',
+                      }}
+                    />
+                  </Suspense>
+                </Col>
+                <Col span={8}>
+                  <Card title="预测详情" size="small">
+                    <Table
+                      key={`table-${metricType}-${result.modelType}`}
+                      dataSource={result.predictions}
+                      columns={predictionColumns}
+                      pagination={false}
+                      size="small"
+                      rowKey="date"
+                    />
+                    {result.modelInfo && (
+                      <div style={{ marginTop: 16, fontSize: 12, color: '#666' }}>
+                        <p>模型信息：</p>
+                        <p>• TensorFlow可用: {result.modelInfo.tensorflowAvailable ? '是' : '否'}</p>
+                        <p>• 序列长度: {result.modelInfo.sequenceLength} 天</p>
+                        <p>• 训练样本数: {result.modelInfo.trainingSamples}</p>
+                      </div>
+                    )}
+                  </Card>
+                </Col>
+              </Row>
+            </Card>
+          );
+        }
+
+        // 如果没有当前指标和模型组合的结果，显示初始提示
         return (
-          <Card
-            key={metric}
-            title={
-              <Space>
-                <LineChartOutlined />
-                <span>{getMetricName(metric)} - {result.modelType.toUpperCase()}模型预测结果</span>
-                <Badge count={result.predictions.length} style={{ backgroundColor: '#52c41a' }} />
-              </Space>
-            }
-            style={{ marginBottom: 16 }}
-          >
-            <Row gutter={16}>
-              <Col span={16}>
-                <Suspense fallback={<Spin />}>
-                  <Line
-                    data={chartData}
-                    xField="date"
-                    yField="value"
-                    seriesField="type"
-                    smooth
-                    height={300}
-                    point={{
-                      size: 4,
-                    }}
-                    legend={{
-                      position: 'top-right',
-                    }}
-                  />
-                </Suspense>
-              </Col>
-              <Col span={8}>
-                <Card title="预测详情" size="small">
-                  <Table
-                    dataSource={result.predictions}
-                    columns={predictionColumns}
-                    pagination={false}
-                    size="small"
-                    rowKey="date"
-                  />
-                  {result.modelInfo && (
-                    <div style={{ marginTop: 16, fontSize: 12, color: '#666' }}>
-                      <p>模型信息：</p>
-                      <p>• TensorFlow可用: {result.modelInfo.tensorflowAvailable ? '是' : '否'}</p>
-                      <p>• 序列长度: {result.modelInfo.sequenceLength} 天</p>
-                      <p>• 训练样本数: {result.modelInfo.trainingSamples}</p>
-                    </div>
-                  )}
-                </Card>
-              </Col>
-            </Row>
+          <Card>
+            <div style={{ textAlign: 'center', padding: '40px 0', color: '#999' }}>
+              <LineChartOutlined style={{ fontSize: 48, marginBottom: 16 }} />
+              <p>请选择预测参数并点击"预测"按钮开始预测</p>
+              <p style={{ fontSize: 12, marginTop: 8 }}>
+                提示：至少需要14天的历史数据才能进行预测
+              </p>
+            </div>
           </Card>
         );
-      })}
-
-      {Object.keys(predictionResults).length === 0 && !batchResults && (
-        <Card>
-          <div style={{ textAlign: 'center', padding: '40px 0', color: '#999' }}>
-            <LineChartOutlined style={{ fontSize: 48, marginBottom: 16 }} />
-            <p>请选择预测参数并点击"预测"按钮开始预测</p>
-            <p style={{ fontSize: 12, marginTop: 8 }}>
-              提示：至少需要14天的历史数据才能进行预测
-            </p>
-          </div>
-        </Card>
-      )}
+      })()}
     </div>
   );
 };

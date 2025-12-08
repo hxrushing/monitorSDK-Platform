@@ -8,15 +8,12 @@ import {
   ApartmentOutlined,
   UserOutlined,
   QuestionCircleOutlined,
-  BookOutlined,
   BugOutlined,
   CodeOutlined,
-  BellOutlined,
-  MessageOutlined,
   RobotOutlined,
   HistoryOutlined
 } from '@ant-design/icons';
-import { Layout, Menu, Button, theme, Select, Modal, Form, Input, message, Dropdown, Space, Switch, Tooltip, Badge, Drawer, Typography, Divider } from 'antd';
+import { Layout, Menu, Button, theme, Select, Modal, Form, Input, message, Dropdown, Space, Switch, Tooltip, Drawer, Typography, Divider } from 'antd';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useTheme } from '@/hooks/useTheme';
 import { apiService, Project } from '@/services/api';
@@ -335,8 +332,15 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
         collapsible 
         collapsed={collapsed} 
         theme={themeMode === 'dark' ? 'dark' : 'light'}
-        style={{ position: 'relative' }}
+        style={{ 
+          display: 'flex',
+          flexDirection: 'column',
+          height: '100vh',
+          position: 'relative',
+          overflow: 'hidden'
+        }}
       >
+        {/* Logo区域 - 固定顶部 */}
         <div
           ref={logoRef}
           draggable
@@ -355,7 +359,8 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
             transition: 'all 0.3s',
             cursor: 'move',
             position: 'relative',
-            zIndex: 1000
+            zIndex: 1000,
+            flexShrink: 0
           }}
         >
           <img 
@@ -372,12 +377,16 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
           />
         </div>
         
-        {/* 菜单区域 - 设置底部边距为底部区域留出空间 */}
-        <div style={{ 
-          height: 'calc(100vh - 200px)', 
-          overflow: 'auto',
-          paddingBottom: '120px' // 为底部区域留出空间
-        }}>
+        {/* 菜单区域 - 可滚动，自动填充剩余空间 */}
+        <div 
+          className="sidebar-menu-container"
+          style={{ 
+            flex: 1,
+            overflow: 'auto',
+            minHeight: 0, // 重要：允许flex子元素缩小
+            paddingBottom: '8px'
+          }}
+        >
           <Menu
             theme={themeMode === 'dark' ? 'dark' : 'light'}
             mode="inline"
@@ -386,20 +395,27 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
             onOpenChange={setOpenKeys}
             items={menuItems as any}
             onClick={handleMenuClick as any}
-            style={{ border: 'none' }}
+            style={{ 
+              border: 'none',
+              height: '100%'
+            }}
           />
         </div>
         
-        {/* 底部帮助和外链区域 */}
-        <div style={{ 
-          position: 'absolute', 
-          bottom: 0, 
-          left: 0, 
-          right: 0, 
-          padding: '16px',
-          borderTop: `1px solid ${themeMode === 'dark' ? '#303030' : '#f0f0f0'}`,
-          background: themeMode === 'dark' ? '#141414' : '#fafafa'
-        }}>
+        {/* 底部帮助区域 - 固定在底部 */}
+        <div 
+          className="sidebar-help-container"
+          style={{ 
+            flexShrink: 0,
+            padding: '12px 16px',
+            borderTop: `1px solid ${themeMode === 'dark' ? '#303030' : '#f0f0f0'}`,
+            background: themeMode === 'dark' ? '#141414' : '#fafafa',
+            position: 'sticky',
+            bottom: 0,
+            zIndex: 100,
+            marginTop: 'auto'
+          }}
+        >
           {/* 帮助按钮 */}
           <Tooltip title="快捷键帮助 (Ctrl+/)">
             <Button
@@ -407,12 +423,16 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
               icon={<QuestionCircleOutlined />}
               onClick={() => setHelpDrawerVisible(true)}
               style={{ 
-                width: '100%', 
-                marginBottom: 8,
-                color: themeMode === 'dark' ? '#fff' : '#666'
+                width: '100%',
+                color: themeMode === 'dark' ? '#fff' : '#666',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: collapsed ? 'center' : 'flex-start',
+                height: '40px',
+                padding: '0 8px'
               }}
             >
-              {!collapsed && '帮助'}
+              {!collapsed && <span style={{ marginLeft: 8 }}>帮助</span>}
             </Button>
           </Tooltip>
         </div>

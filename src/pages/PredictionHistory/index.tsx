@@ -125,7 +125,7 @@ const PredictionHistory: React.FC = () => {
     const names: Record<string, string> = {
       pv: 'PV（页面访问量）',
       uv: 'UV（独立访客）',
-      conversion_rate: '转化率'
+      conversion_rate: '独立访客率（UV/PV）'
     };
     return names[metric] || metric;
   };
@@ -253,7 +253,7 @@ const PredictionHistory: React.FC = () => {
             >
               <Option value="pv">PV（页面访问量）</Option>
               <Option value="uv">UV（独立访客）</Option>
-              <Option value="conversion_rate">转化率</Option>
+              <Option value="conversion_rate">独立访客率（UV/PV）</Option>
             </Select>
           </Col>
           <Col span={6}>

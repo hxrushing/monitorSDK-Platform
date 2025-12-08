@@ -45,3 +45,66 @@ body {
 .ant-layout-sider .ant-menu-item .anticon {
   color: currentColor;
 }
+
+/* 优化侧边栏菜单滚动区域 */
+.ant-layout-sider {
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+/* 自定义滚动条样式 */
+.sidebar-menu-container {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
+}
+
+.sidebar-menu-container::-webkit-scrollbar {
+  width: 6px;
+}
+
+.sidebar-menu-container::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sidebar-menu-container::-webkit-scrollbar-thumb {
+  background-color: rgba(0, 0, 0, 0.2);
+  border-radius: 3px;
+}
+
+.sidebar-menu-container::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(0, 0, 0, 0.3);
+}
+
+/* 暗色主题下的滚动条 */
+[data-theme='dark'] .sidebar-menu-container {
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+
+[data-theme='dark'] .sidebar-menu-container::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.2);
+}
+
+[data-theme='dark'] .sidebar-menu-container::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(255, 255, 255, 0.3);
+}
+
+/* 确保菜单项在滚动时可见 */
+.ant-layout-sider .ant-menu {
+  padding-bottom: 0 !important;
+}
+
+/* 确保底部帮助按钮区域始终可见并固定在底部 */
+.sidebar-help-container {
+  position: sticky !important;
+  bottom: 0 !important;
+  flex-shrink: 0 !important;
+  margin-top: auto !important;
+  background: inherit !important;
+}
+
+/* 确保侧边栏使用flex布局 */
+.ant-layout-sider {
+  display: flex !important;
+  flex-direction: column !important;
+  position: relative !important;
+}

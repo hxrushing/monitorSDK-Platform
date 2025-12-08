@@ -209,7 +209,10 @@ export const apiService = {
   },
 
   async sendAISummaryNow() {
-    const data = await api.post('/ai-summary/send-now');
+    // AI总结需要处理大量数据，设置更长的超时时间（120秒）
+    const data = await api.post('/ai-summary/send-now', {}, {
+      timeout: 120000
+    });
     return data;
   },
 
