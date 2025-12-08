@@ -46,15 +46,42 @@ interface AdaptiveBatchConfig {
   networkCheckInterval: number; // 网络检查间隔（毫秒，默认10000）
 }
 
+// 指数退避配置接口
+interface ExponentialBackoffConfig {
+  enabled: boolean;            // 是否启用指数退避（默认true）
+  baseDelay: number;           // 基础延迟（毫秒，默认1000）
+  maxDelay: number;            // 最大延迟（毫秒，默认30000）
+  multiplier: number;          // 指数乘数（默认2）
+  jitterEnabled: boolean;      // 是否启用抖动（默认true）
+  jitterRatio: number;         // 抖动比例 0-1（默认0.1，即±10%）
+  networkAware: boolean;       // 是否根据网络状况调整（默认true）
+  errorTypeAware: boolean;    // 是否根据错误类型调整（默认true）
+}
+
+// 错误类型枚举
+type ErrorType = 'network' | 'timeout' | 'server' | 'client' | 'unknown';
+
+// 重试记录接口
+interface RetryRecord {
+  eventId: string;
+  retryCount: number;
+  lastRetryTime: number;
+  nextRetryTime: number;
+  backoffDelay: number;
+  errorType: ErrorType;
+  errorMessage?: string;
+}
+
 // 批量发送配置接口
 interface BatchConfig {
   maxBatchSize: number;        // 最大批量大小（如果启用自适应，作为上限）
   flushInterval: number;        // 刷新间隔（毫秒）
   maxRetries: number;          // 最大重试次数
-  retryDelay: number;          // 重试延迟（毫秒）
+  retryDelay: number;          // 重试延迟（毫秒，已废弃，使用exponentialBackoff.baseDelay）
   enableOfflineStorage: boolean; // 是否启用离线存储
   maxStorageSize: number;      // 最大存储大小（字节）
   adaptive?: AdaptiveBatchConfig; // 自适应批量大小配置
+  exponentialBackoff?: ExponentialBackoffConfig; // 指数退避配置
 }
 
 // 白屏检测配置接口
@@ -105,9 +132,11 @@ class AnalyticsSDK {
   };
   private networkCheckTimer: NodeJS.Timeout | null = null;
   private adjustmentTimer: NodeJS.Timeout | null = null;
-  private lastSendTime: number = 0;
-  private lastSendDuration: number = 0;
   private recentSendResults: Array<{ success: boolean; duration: number; batchSize: number }> = [];
+  
+  // 指数退避相关属性
+  private retryRecords: Map<string, RetryRecord> = new Map();
+  private retryTimers: Map<string, NodeJS.Timeout> = new Map();
   
   // 白屏检测相关属性
   private blankScreenConfig: BlankScreenConfig;
@@ -126,7 +155,7 @@ class AnalyticsSDK {
       maxBatchSize: 50,           // 最大批量50个事件
       flushInterval: 5000,         // 5秒刷新一次
       maxRetries: 3,              // 最大重试3次
-      retryDelay: 1000,           // 重试延迟1秒
+      retryDelay: 1000,           // 重试延迟1秒（向后兼容）
       enableOfflineStorage: true, // 启用离线存储
       maxStorageSize: 1024 * 1024, // 最大存储1MB
       adaptive: {
@@ -139,6 +168,17 @@ class AnalyticsSDK {
         adjustmentInterval: 30000, // 30秒调整一次
         networkCheckInterval: 10000, // 10秒检查一次网络
         ...config?.adaptive
+      },
+      exponentialBackoff: {
+        enabled: true,            // 默认启用指数退避
+        baseDelay: 1000,          // 基础延迟1秒
+        maxDelay: 30000,          // 最大延迟30秒
+        multiplier: 2,            // 指数乘数2（2^n）
+        jitterEnabled: true,      // 启用抖动
+        jitterRatio: 0.1,         // 抖动比例10%
+        networkAware: true,       // 根据网络状况调整
+        errorTypeAware: true,     // 根据错误类型调整
+        ...config?.exponentialBackoff
       },
       ...config
     };
@@ -318,9 +358,8 @@ class AnalyticsSDK {
       
       // 使用轻量级请求检测网络延迟
       // 尝试使用 OPTIONS 请求（CORS预检），如果失败则使用小数据包测试
-      let response: Response;
       try {
-        response = await fetch(this.endpoint, {
+        await fetch(this.endpoint, {
           method: 'OPTIONS',
           cache: 'no-cache',
           signal: AbortSignal.timeout(5000) // 5秒超时
@@ -328,7 +367,7 @@ class AnalyticsSDK {
       } catch (optionsError) {
         // OPTIONS 失败，使用小数据包测试
         const testData = { test: true, timestamp: Date.now() };
-        response = await fetch(this.endpoint, {
+        await fetch(this.endpoint, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -556,7 +595,7 @@ class AnalyticsSDK {
   }
 
   // 刷新队列（发送批量事件）
-  private async flushQueue(force: boolean = false): Promise<void> {
+  private async flushQueue(_force: boolean = false): Promise<void> {
     if (this.eventQueue.length === 0) return;
 
     // 如果离线且启用离线存储，保存到本地
@@ -591,7 +630,7 @@ class AnalyticsSDK {
       } else {
         // 发送失败，重新加入队列
         this.eventQueue.unshift(...eventsToSend);
-        this.handleFailedEvents(eventsToSend);
+        this.handleFailedEvents(eventsToSend, new Error('发送失败'));
         this.recordSendResult(false, sendDuration, eventsToSend.length);
       }
     } catch (error) {
@@ -599,7 +638,7 @@ class AnalyticsSDK {
       console.error('批量发送失败:', error);
       // 发送失败，重新加入队列
       this.eventQueue.unshift(...eventsToSend);
-      this.handleFailedEvents(eventsToSend);
+      this.handleFailedEvents(eventsToSend, error as Error);
       this.recordSendResult(false, sendDuration, eventsToSend.length);
     }
   }
@@ -640,45 +679,212 @@ class AnalyticsSDK {
 
     console.log(`发送批量事件，数量: ${events.length}`);
 
-    const response = await fetch(this.endpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(batchData),
-    });
+    try {
+      // 使用 AbortController 支持超时
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10秒超时
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
+      const response = await fetch(this.endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(batchData),
+        signal: controller.signal
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        const statusCode = response.status;
+        let error: Error;
+        
+        // 根据状态码创建更具体的错误
+        if (statusCode >= 500) {
+          error = new Error(`Server error: ${statusCode} - ${errorText}`);
+          (error as any).statusCode = statusCode;
+        } else if (statusCode >= 400) {
+          error = new Error(`Client error: ${statusCode} - ${errorText}`);
+          (error as any).statusCode = statusCode;
+        } else {
+          error = new Error(`HTTP error: ${statusCode} - ${errorText}`);
+          (error as any).statusCode = statusCode;
+        }
+        throw error;
+      }
+
+      await response.json(); // 读取响应但不使用（避免警告）
+      return {
+        success: true,
+        processedCount: events.length,
+        failedEvents: []
+      };
+    } catch (fetchError: any) {
+      let error: Error;
+      // 处理不同类型的错误
+      if (fetchError.name === 'AbortError' || fetchError.message?.includes('aborted')) {
+        error = new Error('Request timeout');
+        (error as any).isTimeout = true;
+      } else if (fetchError.message?.includes('Failed to fetch') || 
+                 fetchError.message?.includes('network')) {
+        error = new Error(`Network error: ${fetchError.message}`);
+        (error as any).isNetworkError = true;
+      } else {
+        error = fetchError;
+      }
+      throw error;
     }
-
-    const result = await response.json();
-    return {
-      success: true,
-      processedCount: events.length,
-      failedEvents: []
-    };
   }
 
   // 处理失败的事件
-  private handleFailedEvents(failedEvents: QueuedEvent[]): void {
+  private handleFailedEvents(failedEvents: QueuedEvent[], error?: Error): void {
+    const errorType = this.classifyError(error);
+    
     failedEvents.forEach(event => {
       event.retryCount++;
       
       if (event.retryCount < this.batchConfig.maxRetries) {
-        // 延迟重试
-        setTimeout(() => {
+        // 使用优化的指数退避算法
+        const backoffDelay = this.calculateBackoffDelay(event.retryCount, errorType);
+        
+        // 记录重试信息
+        const retryRecord: RetryRecord = {
+          eventId: event.id,
+          retryCount: event.retryCount,
+          lastRetryTime: Date.now(),
+          nextRetryTime: Date.now() + backoffDelay,
+          backoffDelay,
+          errorType
+        };
+        this.retryRecords.set(event.id, retryRecord);
+        
+        // 清除之前的定时器（如果存在）
+        const existingTimer = this.retryTimers.get(event.id);
+        if (existingTimer) {
+          clearTimeout(existingTimer);
+        }
+        
+        // 设置新的重试定时器
+        const timer = setTimeout(() => {
+          this.retryTimers.delete(event.id);
           this.eventQueue.push(event);
-        }, this.batchConfig.retryDelay * event.retryCount);
+          console.log(`事件 ${event.id} 第 ${event.retryCount} 次重试，延迟 ${backoffDelay}ms`);
+        }, backoffDelay);
+        
+        this.retryTimers.set(event.id, timer);
       } else {
         // 超过最大重试次数，保存到离线存储
-        console.warn(`事件 ${event.id} 重试次数超限，保存到离线存储`);
+        console.warn(`事件 ${event.id} 重试次数超限（${event.retryCount}次），保存到离线存储`);
+        this.retryRecords.delete(event.id);
+        const existingTimer = this.retryTimers.get(event.id);
+        if (existingTimer) {
+          clearTimeout(existingTimer);
+          this.retryTimers.delete(event.id);
+        }
         if (this.batchConfig.enableOfflineStorage) {
           this.saveEventToOfflineStorage(event);
         }
       }
     });
+  }
+
+  // 分类错误类型
+  private classifyError(error?: Error): ErrorType {
+    if (!error) {
+      return 'unknown';
+    }
+
+    const errorMessage = error.message?.toLowerCase() || '';
+    const errorName = error.name?.toLowerCase() || '';
+
+    // 网络错误
+    if (errorMessage.includes('network') || 
+        errorMessage.includes('fetch') || 
+        errorMessage.includes('connection') ||
+        errorName === 'networkerror' ||
+        errorName === 'typeerror') {
+      return 'network';
+    }
+
+    // 超时错误
+    if (errorMessage.includes('timeout') || 
+        errorMessage.includes('aborted') ||
+        errorName === 'timeouterror' ||
+        errorName === 'aborterror') {
+      return 'timeout';
+    }
+
+    // 服务器错误（5xx）
+    if (errorMessage.includes('500') || 
+        errorMessage.includes('502') || 
+        errorMessage.includes('503') ||
+        errorMessage.includes('504') ||
+        errorMessage.includes('server error')) {
+      return 'server';
+    }
+
+    // 客户端错误（4xx）
+    if (errorMessage.includes('400') || 
+        errorMessage.includes('401') || 
+        errorMessage.includes('403') ||
+        errorMessage.includes('404') ||
+        errorMessage.includes('client error')) {
+      return 'client';
+    }
+
+    return 'unknown';
+  }
+
+  // 计算指数退避延迟
+  private calculateBackoffDelay(retryCount: number, errorType: ErrorType): number {
+    const backoffConfig = this.batchConfig.exponentialBackoff;
+    
+    // 如果不启用指数退避，使用简单的线性退避（向后兼容）
+    if (!backoffConfig?.enabled) {
+      return this.batchConfig.retryDelay * retryCount;
+    }
+
+    // 基础延迟
+    let baseDelay = backoffConfig.baseDelay;
+
+    // 根据错误类型调整基础延迟
+    if (backoffConfig.errorTypeAware) {
+      const errorTypeMultiplier = {
+        network: 1.2,    // 网络错误增加20%延迟
+        timeout: 1.5,    // 超时错误增加50%延迟
+        server: 1.0,    // 服务器错误保持原样
+        client: 0.8,    // 客户端错误减少20%延迟（可能是临时问题）
+        unknown: 1.0
+      };
+      baseDelay = baseDelay * errorTypeMultiplier[errorType];
+    }
+
+    // 根据网络状况调整基础延迟
+    if (backoffConfig.networkAware && this.networkMetrics) {
+      const networkMultiplier = {
+        excellent: 0.8,  // 网络好时减少延迟
+        good: 0.9,
+        fair: 1.1,      // 网络一般时增加延迟
+        poor: 1.5       // 网络差时大幅增加延迟
+      };
+      baseDelay = baseDelay * networkMultiplier[this.networkMetrics.quality];
+    }
+
+    // 计算指数退避：baseDelay * multiplier^retryCount
+    let delay = baseDelay * Math.pow(backoffConfig.multiplier, retryCount - 1);
+
+    // 应用最大延迟限制
+    delay = Math.min(delay, backoffConfig.maxDelay);
+
+    // 添加抖动（jitter）避免雷群效应
+    if (backoffConfig.jitterEnabled) {
+      const jitterRange = delay * backoffConfig.jitterRatio;
+      const jitter = (Math.random() * 2 - 1) * jitterRange; // ±jitterRange
+      delay = Math.max(100, delay + jitter); // 确保最小延迟100ms
+    }
+
+    return Math.round(delay);
   }
 
   // 保存到离线存储
@@ -772,6 +978,7 @@ class AnalyticsSDK {
   // 更新批量配置（公开方法）
   public updateBatchConfig(newConfig: Partial<BatchConfig>): void {
     const wasAdaptiveEnabled = this.batchConfig.adaptive?.enabled;
+    const wasBackoffEnabled = this.batchConfig.exponentialBackoff?.enabled;
     
     this.batchConfig = { ...this.batchConfig, ...newConfig };
     
@@ -791,6 +998,14 @@ class AnalyticsSDK {
         this.stopAdjustmentTimer();
         this.startNetworkCheckTimer();
         this.startAdjustmentTimer();
+      }
+    }
+
+    // 如果指数退避配置更新
+    if (newConfig.exponentialBackoff !== undefined) {
+      if (!this.batchConfig.exponentialBackoff?.enabled && wasBackoffEnabled) {
+        // 从启用变为禁用，清除所有重试定时器
+        this.clearRetryRecords();
       }
     }
     
@@ -831,6 +1046,71 @@ class AnalyticsSDK {
   // 手动触发网络检测（公开方法）
   public checkNetworkManually(): Promise<void> {
     return this.checkNetworkStatus();
+  }
+
+  // 获取重试记录（公开方法）
+  public getRetryRecords(): RetryRecord[] {
+    return Array.from(this.retryRecords.values());
+  }
+
+  // 获取指定事件的重试记录（公开方法）
+  public getRetryRecord(eventId: string): RetryRecord | undefined {
+    return this.retryRecords.get(eventId);
+  }
+
+  // 清除重试记录（公开方法）
+  public clearRetryRecords(): void {
+    // 清除所有定时器
+    this.retryTimers.forEach(timer => clearTimeout(timer));
+    this.retryTimers.clear();
+    this.retryRecords.clear();
+  }
+
+  // 取消指定事件的重试（公开方法）
+  public cancelRetry(eventId: string): boolean {
+    const timer = this.retryTimers.get(eventId);
+    if (timer) {
+      clearTimeout(timer);
+      this.retryTimers.delete(eventId);
+      this.retryRecords.delete(eventId);
+      return true;
+    }
+    return false;
+  }
+
+  // 获取重试统计信息（公开方法）
+  public getRetryStatistics(): {
+    totalRetries: number;
+    activeRetries: number;
+    retriesByErrorType: Record<ErrorType, number>;
+    avgBackoffDelay: number;
+    maxBackoffDelay: number;
+  } {
+    const records = Array.from(this.retryRecords.values());
+    const retriesByErrorType: Record<ErrorType, number> = {
+      network: 0,
+      timeout: 0,
+      server: 0,
+      client: 0,
+      unknown: 0
+    };
+
+    let totalBackoffDelay = 0;
+    let maxBackoffDelay = 0;
+
+    records.forEach(record => {
+      retriesByErrorType[record.errorType]++;
+      totalBackoffDelay += record.backoffDelay;
+      maxBackoffDelay = Math.max(maxBackoffDelay, record.backoffDelay);
+    });
+
+    return {
+      totalRetries: records.length,
+      activeRetries: this.retryTimers.size,
+      retriesByErrorType,
+      avgBackoffDelay: records.length > 0 ? totalBackoffDelay / records.length : 0,
+      maxBackoffDelay
+    };
   }
 
   public track(eventName: string, eventParams?: Record<string, any>, priority: 'high' | 'normal' | 'low' = 'normal') {
