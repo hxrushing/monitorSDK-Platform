@@ -16,6 +16,7 @@ import dayjs from 'dayjs';
 import { apiService } from '@/services/api';
 import type { EventDefinition } from '@/types';
 import useGlobalStore from '@/store/globalStore';
+import { adaptiveChartSampling } from '@/utils/dataSampling';
 
 const { RangePicker } = DatePicker;
 
@@ -146,12 +147,18 @@ const EventAnalysis: React.FC = () => {
     },
   ];
 
+  // 准备图表数据并应用LTTB采样
+  const chartData = analysisData.map(item => ({
+    date: item.date,
+    value: item.count,
+    type: eventOptions.find(e => e.eventName === item.eventName)?.description || item.eventName
+  }));
+  
+  // 使用LTTB算法进行智能采样，优化大数据量图表渲染性能
+  const sampledChartData = adaptiveChartSampling(chartData, 500, 1000, 'date', 'value', 'type');
+
   const lineConfig = {
-    data: analysisData.map(item => ({
-      date: item.date,
-      value: item.count,
-      type: eventOptions.find(e => e.eventName === item.eventName)?.description || item.eventName
-    })),
+    data: sampledChartData,
     xField: 'date',
     yField: 'value',
     seriesField: 'type',

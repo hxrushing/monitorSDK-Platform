@@ -26,6 +26,7 @@ const Line = React.lazy(() => import('@ant-design/plots').then(m => ({ default: 
 import { apiService } from '@/services/api';
 import useGlobalStore from '@/store/globalStore';
 import dayjs from 'dayjs';
+import { adaptiveChartSampling } from '@/utils/dataSampling';
 
 const { Option } = Select;
 const { RangePicker } = DatePicker;
@@ -218,7 +219,10 @@ const PredictionHistory: React.FC = () => {
       type: '预测数据'
     }));
 
-    return [...historical, ...predictions];
+    const allData = [...historical, ...predictions];
+    
+    // 使用LTTB算法进行智能采样，优化大数据量图表渲染性能
+    return adaptiveChartSampling(allData, 500, 1000, 'date', 'value', 'type');
   };
 
   return (

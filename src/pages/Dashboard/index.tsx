@@ -16,6 +16,7 @@ import { apiService } from '@/services/api';
 import type { TopProject } from '@/services/api';
 import FloatingPanel from '@/components/FloatingPanel';
 import useGlobalStore from '@/store/globalStore';
+import { adaptiveChartSampling } from '@/utils/dataSampling';
 
 const { RangePicker } = DatePicker;
 
@@ -77,11 +78,17 @@ const Dashboard: React.FC = () => {
     fetchData();
   }, [dateRange, selectedProjectId]);
 
+  // 准备图表数据并应用LTTB采样
+  const chartData = statsData.map(item => [
+    { date: item.date, value: item.pv, type: 'PV' },
+    { date: item.date, value: item.uv, type: 'UV' }
+  ]).flat();
+  
+  // 使用LTTB算法进行智能采样，优化大数据量图表渲染性能
+  const sampledChartData = adaptiveChartSampling(chartData, 500, 1000, 'date', 'value', 'type');
+
   const lineConfig = {
-    data: statsData.map(item => [
-      { date: item.date, value: item.pv, type: 'PV' },
-      { date: item.date, value: item.uv, type: 'UV' }
-    ]).flat(),
+    data: sampledChartData,
     xField: 'date',
     yField: 'value',
     seriesField: 'type',

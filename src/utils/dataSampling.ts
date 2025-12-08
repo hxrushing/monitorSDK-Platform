@@ -8,7 +8,9 @@
  * 保持数据趋势特征的采样方法
  * 
  * @param data 原始数据数组
- * @param maxPoints 最大采样点数
+ * @param maxPoints 最大采样点数（默认1000）
+ * @param xField X轴字段名（默认'date'）
+ * @param yField Y轴字段名（默认'value'）
  * @returns 采样后的数据数组
  */
 export function lttbSampling<T extends { [key: string]: any }>(
@@ -17,57 +19,68 @@ export function lttbSampling<T extends { [key: string]: any }>(
   xField: string = 'date',
   yField: string = 'value'
 ): T[] {
+  if (!data || data.length === 0) {
+    return [];
+  }
+  
   if (data.length <= maxPoints) {
     return data;
   }
 
+  // 如果只需要1个点，返回第一个点
+  if (maxPoints === 1) {
+    return [data[0]];
+  }
+
+  // 如果只需要2个点，返回首尾两个点
+  if (maxPoints === 2) {
+    return [data[0], data[data.length - 1]];
+  }
+
   const sampled: T[] = [];
   const bucketSize = (data.length - 2) / (maxPoints - 2);
-  let a = 0; // 第一个点索引
+  let a = 0; // 已选中的前一个点索引
 
   // 总是包含第一个点
   sampled.push(data[0]);
 
   for (let i = 0; i < maxPoints - 2; i++) {
     const rangeStart = Math.floor((i + 1) * bucketSize) + 1;
-    const rangeEnd = Math.floor((i + 2) * bucketSize) + 1;
+    const rangeEnd = Math.min(Math.floor((i + 2) * bucketSize) + 1, data.length - 1);
     const rangeEndNext = Math.min(rangeEnd + 1, data.length - 1);
 
-    let avgRangeStart = 0;
-    let avgRangeEnd = 0;
+    // 计算下一个桶的平均值（用于计算三角形面积）
     let avgRangeEndNext = 0;
-    let avgRangeStartLength = 0;
-    let avgRangeEndLength = 0;
-    let avgRangeEndNextLength = 0;
-
-    // 计算范围平均值
-    for (let j = rangeStart; j < rangeEnd; j++) {
-      avgRangeStart += Number(data[j][yField]) || 0;
-      avgRangeStartLength++;
-    }
-    avgRangeStart = avgRangeStart / avgRangeStartLength;
-
+    let avgRangeEndNextCount = 0;
+    
     for (let j = rangeEnd; j < rangeEndNext; j++) {
-      avgRangeEnd += Number(data[j][yField]) || 0;
-      avgRangeEndLength++;
+      const yValue = Number(data[j]?.[yField]);
+      if (!isNaN(yValue)) {
+        avgRangeEndNext += yValue;
+        avgRangeEndNextCount++;
+      }
     }
-    avgRangeEnd = avgRangeEnd / avgRangeEndLength;
+    avgRangeEndNext = avgRangeEndNextCount > 0 ? avgRangeEndNext / avgRangeEndNextCount : 0;
 
-    for (let j = rangeEndNext; j < Math.min(rangeEndNext + 1, data.length); j++) {
-      avgRangeEndNext += Number(data[j][yField]) || 0;
-      avgRangeEndNextLength++;
-    }
-    avgRangeEndNext = avgRangeEndNext / avgRangeEndNextLength;
-
-    // 计算三角形面积，找到最大面积的点
+    // 计算当前桶中每个点与已选点和下一个桶平均点形成的三角形面积
+    // 选择面积最大的点
     let maxArea = -1;
     let maxAreaIndex = rangeStart;
 
+    const aX = getNumericValue(data[a], xField);
+    const aY = Number(data[a]?.[yField]) || 0;
+
     for (let j = rangeStart; j < rangeEnd; j++) {
+      const jX = getNumericValue(data[j], xField);
+      const jY = Number(data[j]?.[yField]) || 0;
+
+      // 计算三角形面积（使用叉积公式）
+      // 面积 = |(x1-x3)(y2-y1) - (x1-x2)(y3-y1)| / 2
       const area = Math.abs(
-        (Number(data[a][xField]) - avgRangeEndNext) * (Number(data[j][yField]) - Number(data[a][yField])) -
-        (Number(data[a][xField]) - Number(data[j][xField])) * (avgRangeEndNext - Number(data[a][yField]))
+        (aX - avgRangeEndNext) * (jY - aY) - 
+        (aX - jX) * (avgRangeEndNext - aY)
       );
+
       if (area > maxArea) {
         maxArea = area;
         maxAreaIndex = j;
@@ -82,6 +95,29 @@ export function lttbSampling<T extends { [key: string]: any }>(
   sampled.push(data[data.length - 1]);
 
   return sampled;
+}
+
+/**
+ * 获取数值（支持日期字符串转换为时间戳）
+ */
+function getNumericValue(item: any, field: string): number {
+  const value = item[field];
+  if (typeof value === 'number') {
+    return value;
+  }
+  if (typeof value === 'string') {
+    // 尝试解析日期字符串
+    const date = new Date(value);
+    if (!isNaN(date.getTime())) {
+      return date.getTime();
+    }
+    // 尝试解析数字字符串
+    const num = Number(value);
+    if (!isNaN(num)) {
+      return num;
+    }
+  }
+  return 0;
 }
 
 /**
@@ -195,9 +231,93 @@ export function timeWindowSampling<T extends { [key: string]: any }>(
   );
 }
 
+/**
+ * 对图表数据进行智能采样
+ * 支持多系列数据（通过 seriesField 分组）
+ * 
+ * @param data 原始数据数组
+ * @param maxPoints 每个系列的最大采样点数（默认1000）
+ * @param xField X轴字段名（默认'date'）
+ * @param yField Y轴字段名（默认'value'）
+ * @param seriesField 系列字段名（可选，如果提供则按系列分组采样）
+ * @returns 采样后的数据数组
+ */
+export function smartChartSampling<T extends { [key: string]: any }>(
+  data: T[],
+  maxPoints: number = 1000,
+  xField: string = 'date',
+  yField: string = 'value',
+  seriesField?: string
+): T[] {
+  if (!data || data.length === 0) {
+    return [];
+  }
 
+  // 如果没有系列字段，直接对整个数据集采样
+  if (!seriesField) {
+    return lttbSampling(data, maxPoints, xField, yField);
+  }
 
+  // 按系列分组
+  const seriesMap = new Map<string, T[]>();
+  data.forEach(item => {
+    const seriesValue = String(item[seriesField] || 'default');
+    if (!seriesMap.has(seriesValue)) {
+      seriesMap.set(seriesValue, []);
+    }
+    seriesMap.get(seriesValue)!.push(item);
+  });
 
+  // 对每个系列分别采样
+  const sampledData: T[] = [];
+  seriesMap.forEach((seriesData, seriesValue) => {
+    // 按时间排序
+    const sortedData = [...seriesData].sort((a, b) => {
+      const aTime = getNumericValue(a, xField);
+      const bTime = getNumericValue(b, xField);
+      return aTime - bTime;
+    });
+    
+    // 对每个系列进行LTTB采样
+    const sampled = lttbSampling(sortedData, maxPoints, xField, yField);
+    sampledData.push(...sampled);
+  });
+
+  return sampledData;
+}
+
+/**
+ * 自适应图表采样
+ * 根据数据量自动决定是否采样以及采样点数
+ * 
+ * @param data 原始数据数组
+ * @param threshold 触发采样的数据量阈值（默认500）
+ * @param maxPoints 最大采样点数（默认1000）
+ * @param xField X轴字段名（默认'date'）
+ * @param yField Y轴字段名（默认'value'）
+ * @param seriesField 系列字段名（可选）
+ * @returns 采样后的数据数组
+ */
+export function adaptiveChartSampling<T extends { [key: string]: any }>(
+  data: T[],
+  threshold: number = 500,
+  maxPoints: number = 1000,
+  xField: string = 'date',
+  yField: string = 'value',
+  seriesField?: string
+): T[] {
+  if (!data || data.length === 0) {
+    return [];
+  }
+
+  // 如果数据量小于阈值，不采样
+  if (data.length <= threshold) {
+    return data;
+  }
+
+  // 使用智能采样
+  return smartChartSampling(data, maxPoints, xField, yField, seriesField);
+}
 
 
 

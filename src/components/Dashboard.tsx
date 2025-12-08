@@ -3,6 +3,7 @@ import { Card, DatePicker, Select, Row, Col } from 'antd';
 import { Line } from '@ant-design/plots';
 import dayjs, { Dayjs } from 'dayjs';
 import type { EventStats } from '@/types';
+import { adaptiveChartSampling } from '@/utils/dataSampling';
 
 const { RangePicker } = DatePicker;
 
@@ -38,10 +39,20 @@ const Dashboard: React.FC<DashboardProps> = ({ projectId }) => {
     }
   };
 
+    // 准备图表数据并应用LTTB采样
+  const chartData = stats.map(item => ({
+    date: item.date,
+    value: item.pv,
+    type: item.type || 'PV'
+  }));
+  
+  // 使用LTTB算法进行智能采样，优化大数据量图表渲染性能
+  const sampledChartData = adaptiveChartSampling(chartData, 500, 1000, 'date', 'value', 'type');
+
   const lineConfig = {
-    data: stats,
+    data: sampledChartData,
     xField: 'date',
-    yField: 'pv',
+    yField: 'value',
     seriesField: 'type',
     smooth: true,
     animation: {
