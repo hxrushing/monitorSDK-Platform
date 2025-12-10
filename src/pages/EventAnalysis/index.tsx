@@ -164,12 +164,8 @@ const EventAnalysis: React.FC = () => {
     yField: 'value',
     seriesField: 'type',
     smooth: true,
-    animation: {
-      appear: {
-        animation: 'wave-in',
-        duration: 1000,
-      },
-    },
+    animation: false,
+    renderer: ('canvas' as 'canvas'),
   };
 
   return (

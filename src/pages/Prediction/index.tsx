@@ -1,4 +1,4 @@
-import React, { useState, useEffect, Suspense } from 'react';
+import React, { useState, useEffect, useRef, Suspense } from 'react';
 import {
   Card,
   Row,
@@ -56,6 +56,7 @@ const Prediction: React.FC = () => {
   const [healthCheckLoading, setHealthCheckLoading] = useState(false);
   const [mlServiceAvailable, setMlServiceAvailable] = useState<boolean | null>(null);
   const [mlServiceUrl, setMlServiceUrl] = useState<string>('');
+  const healthCheckRef = useRef(false); // 防止重复检查
 
   // 预测参数
   const [metricType, setMetricType] = useState<'pv' | 'uv' | 'conversion_rate'>('pv');
@@ -67,27 +68,34 @@ const Prediction: React.FC = () => {
   const [batchResults, setBatchResults] = useState<any>(null);
 
   // 检查ML服务健康状态
-  const checkMLServiceHealth = async () => {
+  const checkMLServiceHealth = async (showMessage = true) => {
     setHealthCheckLoading(true);
     try {
       const result = await apiService.checkPredictionHealth();
       setMlServiceAvailable(result.mlServiceAvailable);
       setMlServiceUrl(result.mlServiceUrl || '');
-      if (result.mlServiceAvailable) {
-        message.success('ML预测服务连接正常');
-      } else {
-        message.warning('ML预测服务不可用');
+      if (showMessage) {
+        if (result.mlServiceAvailable) {
+          message.success('ML预测服务连接正常');
+        } else {
+          message.warning('ML预测服务不可用');
+        }
       }
     } catch (error) {
       console.error('检查ML服务状态失败:', error);
       setMlServiceAvailable(false);
-      message.error('检查ML服务状态失败');
+      if (showMessage) {
+        message.error('检查ML服务状态失败');
+      }
     } finally {
       setHealthCheckLoading(false);
     }
   };
 
   useEffect(() => {
+    // 防止 React StrictMode 导致的重复执行
+    if (healthCheckRef.current) return;
+    healthCheckRef.current = true;
     checkMLServiceHealth();
   }, []);
 
@@ -117,13 +125,14 @@ const Prediction: React.FC = () => {
         return newResults;
       });
       
-      const result = await apiService.predict({
+      const response = await apiService.predict({
         projectId: selectedProjectId,
         metricType: currentMetricType,
         modelType,
         days
       });
       
+      const result = response.data || response;
       console.log('预测结果:', result);
 
       loadingMessage(); // 关闭加载提示
@@ -165,13 +174,14 @@ const Prediction: React.FC = () => {
     const loadingMessage = message.loading('正在批量预测多个指标，这可能需要60-120秒，请耐心等待...', 0);
     
     try {
-      const result = await apiService.predictBatch({
+      const response = await apiService.predictBatch({
         projectId: selectedProjectId,
         metrics: ['pv', 'uv', 'conversion_rate'],
         modelType,
         days
       });
 
+      const result = response.data || response;
       loadingMessage(); // 关闭加载提示
       
       if (result.success) {
@@ -288,7 +298,7 @@ const Prediction: React.FC = () => {
             size="small"
             icon={<ReloadOutlined />}
             loading={healthCheckLoading}
-            onClick={checkMLServiceHealth}
+            onClick={() => checkMLServiceHealth(true)}
           >
             刷新状态
           </Button>
@@ -467,6 +477,8 @@ const Prediction: React.FC = () => {
                         yField="value"
                         smooth
                         height={200}
+                        animation={false}
+                        renderer={'canvas' as 'canvas'}
                       />
                     </Suspense>
                   </Card>
@@ -517,6 +529,8 @@ const Prediction: React.FC = () => {
                       legend={{
                         position: 'top-right',
                       }}
+                      animation={false}
+                      renderer={'canvas' as 'canvas'}
                     />
                   </Suspense>
                 </Col>
@@ -530,6 +544,7 @@ const Prediction: React.FC = () => {
                       size="small"
                       rowKey="date"
                       scroll={{ y: 400 }}
+                      virtual={false}
                     />
                     {result.modelInfo && (
                       <div style={{ marginTop: 16, fontSize: 12, color: '#666' }}>
