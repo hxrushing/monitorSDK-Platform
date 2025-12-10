@@ -388,6 +388,7 @@ const PredictionHistory: React.FC = () => {
               pagination={false}
               size="small"
               rowKey="date"
+              scroll={{ y: 400 }}
             />
           </Card>
         </Card>

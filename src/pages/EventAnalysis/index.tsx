@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { Card, Row, Col, DatePicker, Select, Table, Button, Spin, message, Space, Badge } from 'antd';
-import { Line } from '@ant-design/plots';
+// 懒加载图表组件，减少初始 bundle 大小
+const Line = React.lazy(() => import('@ant-design/plots').then(m => ({ default: m.Line })));
 import { 
   BarChartOutlined, 
   CalendarOutlined, 
@@ -219,7 +220,9 @@ const EventAnalysis: React.FC = () => {
           } 
           style={{ marginTop: 16 }}
         >
-          <Line {...lineConfig} />
+          <Suspense fallback={<Spin size="large" style={{ display: 'block', textAlign: 'center', padding: '40px' }} />}>
+            <Line {...lineConfig} />
+          </Suspense>
         </Card>
 
         <Card 
@@ -232,7 +235,16 @@ const EventAnalysis: React.FC = () => {
           } 
           style={{ marginTop: 16 }}
         >
-          <Table columns={columns} dataSource={analysisData} />
+          <Table 
+            columns={columns} 
+            dataSource={analysisData}
+            scroll={{ y: 500 }}
+            pagination={analysisData.length > 50 ? {
+              pageSize: 50,
+              showSizeChanger: true,
+              showTotal: (total) => `共 ${total} 条`,
+            } : false}
+          />
         </Card>
       </div>
     </Spin>

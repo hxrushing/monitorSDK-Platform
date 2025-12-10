@@ -38,6 +38,10 @@ const Dashboard: React.FC = () => {
   const selectedProjectId = useGlobalStore(state => state.selectedProjectId);
 
   const fetchData = async () => {
+    if (!selectedProjectId) {
+      return;
+    }
+    
     try {
       setLoading(true);
       // 清空旧数据
@@ -50,25 +54,65 @@ const Dashboard: React.FC = () => {
       });
       setTopProjects([]);
       
-      const [stats, overviewData, topProjectsData] = await Promise.all([
-        apiService.getStats({
-          projectId: selectedProjectId,
-          startDate: dateRange[0].format('YYYY-MM-DD'),
-          endDate: dateRange[1].format('YYYY-MM-DD')
-        }),
-        apiService.getDashboardOverview(selectedProjectId),
-        apiService.getTopProjects({
-          projectId: selectedProjectId,
-          startDate: dateRange[0].format('YYYY-MM-DD'),
-          endDate: dateRange[1].format('YYYY-MM-DD')
-        })
-      ]);
-      setStatsData(stats);
-      setOverview(overviewData);
-      setTopProjects(topProjectsData);
-    } catch (error) {
-      message.error('获取数据失败');
-      console.error('Error fetching dashboard data:', error);
+      // 显示加载提示
+      const hideLoading = message.loading('正在加载数据，请稍候...', 0);
+      
+      try {
+        // 使用 Promise.allSettled 避免一个失败导致全部失败
+        const results = await Promise.allSettled([
+          apiService.getStats({
+            projectId: selectedProjectId,
+            startDate: dateRange[0].format('YYYY-MM-DD'),
+            endDate: dateRange[1].format('YYYY-MM-DD')
+          }),
+          apiService.getDashboardOverview(selectedProjectId),
+          apiService.getTopProjects({
+            projectId: selectedProjectId,
+            startDate: dateRange[0].format('YYYY-MM-DD'),
+            endDate: dateRange[1].format('YYYY-MM-DD')
+          })
+        ]);
+        
+        hideLoading();
+        
+        // 处理统计查询结果
+        if (results[0].status === 'fulfilled') {
+          setStatsData(results[0].value);
+        } else {
+          console.error('获取统计数据失败:', results[0].reason);
+          message.warning('获取统计数据失败，可能是数据量过大，请缩小查询范围');
+        }
+        
+        // 处理概览数据
+        if (results[1].status === 'fulfilled') {
+          setOverview(results[1].value);
+        } else {
+          console.error('获取概览数据失败:', results[1].reason);
+          if (results[1].reason?.code === 'ECONNABORTED') {
+            message.warning('获取概览数据超时，可能是数据量过大');
+          }
+        }
+        
+        // 处理Top项目数据
+        if (results[2].status === 'fulfilled') {
+          setTopProjects(results[2].value);
+        } else {
+          console.error('获取Top项目数据失败:', results[2].reason);
+        }
+        
+        // 如果所有请求都失败
+        if (results.every(r => r.status === 'rejected')) {
+          message.error('获取数据失败，请检查网络连接或缩小查询范围');
+        }
+      } catch (error: any) {
+        hideLoading();
+        if (error?.code === 'ECONNABORTED') {
+          message.error('请求超时，数据量过大，请缩小查询日期范围');
+        } else {
+          message.error('获取数据失败: ' + (error?.message || '未知错误'));
+        }
+        console.error('Error fetching dashboard data:', error);
+      }
     } finally {
       setLoading(false);
     }

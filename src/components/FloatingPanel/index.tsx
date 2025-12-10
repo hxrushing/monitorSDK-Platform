@@ -31,6 +31,8 @@ const FloatingPanel: React.FC<FloatingPanelProps> = ({
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [collapsed, setCollapsed] = useState(defaultCollapsed);
   const panelRef = useRef<HTMLDivElement>(null);
+  const rafIdRef = useRef<number | null>(null);
+  const pendingPositionRef = useRef<{ x: number; y: number } | null>(null);
 
   const handleMouseDown = (e: React.MouseEvent) => {
     if (e.target instanceof HTMLElement && e.target.closest('.floating-panel-header')) {
@@ -46,24 +48,46 @@ const FloatingPanel: React.FC<FloatingPanelProps> = ({
   };
 
   const handleMouseMove = (e: MouseEvent) => {
-    if (isDragging) {
-      const x = e.clientX - dragOffset.x;
-      const y = e.clientY - dragOffset.y;
-      
-      // 获取视口尺寸
-      const viewportWidth = window.innerWidth;
-      const viewportHeight = window.innerHeight;
-      
-      // 限制面板不超出视口
-      const boundedX = Math.max(0, Math.min(x, viewportWidth - width));
-      const boundedY = Math.max(0, Math.min(y, viewportHeight - 100));
-      
-      setPosition({ x: boundedX, y: boundedY });
+    if (!isDragging) return;
+    
+    const x = e.clientX - dragOffset.x;
+    const y = e.clientY - dragOffset.y;
+    
+    // 获取视口尺寸（这些属性不会触发重排）
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    
+    // 限制面板不超出视口
+    const boundedX = Math.max(0, Math.min(x, viewportWidth - width));
+    const boundedY = Math.max(0, Math.min(y, viewportHeight - 100));
+    
+    // 保存待更新的位置
+    pendingPositionRef.current = { x: boundedX, y: boundedY };
+    
+    // 使用 requestAnimationFrame 节流，避免频繁更新状态导致重排
+    if (rafIdRef.current === null) {
+      rafIdRef.current = requestAnimationFrame(() => {
+        if (pendingPositionRef.current) {
+          setPosition(pendingPositionRef.current);
+          pendingPositionRef.current = null;
+        }
+        rafIdRef.current = null;
+      });
     }
   };
 
   const handleMouseUp = () => {
     setIsDragging(false);
+    // 取消待处理的动画帧
+    if (rafIdRef.current !== null) {
+      cancelAnimationFrame(rafIdRef.current);
+      rafIdRef.current = null;
+    }
+    // 应用最后一次位置更新
+    if (pendingPositionRef.current) {
+      setPosition(pendingPositionRef.current);
+      pendingPositionRef.current = null;
+    }
   };
 
   useEffect(() => {

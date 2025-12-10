@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { Card, Row, Col, DatePicker, Button, Select, Table, Spin, message } from 'antd';
-import { Funnel } from '@ant-design/plots';
+// 懒加载图表组件，减少初始 bundle 大小
+const Funnel = React.lazy(() => import('@ant-design/plots').then(m => ({ default: m.Funnel })));
 import dayjs from 'dayjs';
 import { apiService } from '@/services/api';
 import type { EventDefinition } from '@/types';
@@ -150,7 +151,9 @@ const FunnelAnalysis: React.FC = () => {
         <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
           <Col span={12}>
             <Card title="转化漏斗">
-              <Funnel {...funnelConfig} />
+              <Suspense fallback={<Spin size="large" style={{ display: 'block', textAlign: 'center', padding: '40px' }} />}>
+                <Funnel {...funnelConfig} />
+              </Suspense>
             </Card>
           </Col>
           <Col span={12}>

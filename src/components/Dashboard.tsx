@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { Card, DatePicker, Select, Row, Col } from 'antd';
-import { Line } from '@ant-design/plots';
+import React, { useState, useEffect, Suspense } from 'react';
+import { Card, DatePicker, Select, Row, Col, Spin } from 'antd';
+// 懒加载图表组件，减少初始 bundle 大小
+const Line = React.lazy(() => import('@ant-design/plots').then(m => ({ default: m.Line })));
 import dayjs, { Dayjs } from 'dayjs';
 import type { EventStats } from '@/types';
 import { adaptiveChartSampling } from '@/utils/dataSampling';
@@ -89,7 +90,9 @@ const Dashboard: React.FC<DashboardProps> = ({ projectId }) => {
       <Row gutter={[16, 16]} className="dashboard-charts">
         <Col span={24}>
           <Card title="访问趋势">
-            <Line {...lineConfig} />
+            <Suspense fallback={<Spin size="large" style={{ display: 'block', textAlign: 'center', padding: '40px' }} />}>
+              <Line {...lineConfig} />
+            </Suspense>
           </Card>
         </Col>
       </Row>

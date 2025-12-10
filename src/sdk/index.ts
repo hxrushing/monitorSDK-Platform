@@ -21,7 +21,7 @@ interface CommonParams {
 interface NetworkMetrics {
   rtt: number;                 // 往返时延（毫秒）
   bandwidth: number;            // 带宽估算（字节/秒）
-  connectionType: string;      // 连接类型（4g, 3g, wifi等）
+  connectionType: string;      // 连接类型（wifi, cellular-4g, ethernet, 4g, 3g等，unknown表示未知）
   quality: 'excellent' | 'good' | 'fair' | 'poor'; // 网络质量评级
   lastUpdate: number;          // 最后更新时间
 }
@@ -437,7 +437,26 @@ class AnalyticsSDK {
       let bandwidth = 0;
 
       if (connection) {
-        connectionType = connection.effectiveType || connectionType;
+        // 优先获取连接类型（type: wifi, cellular, ethernet等）
+        const type = connection.type;
+        // 获取有效连接类型（effectiveType: 4g, 3g, 2g等）
+        const effectiveType = connection.effectiveType;
+        
+        // 组合连接类型信息，提供更详细的描述
+        if (type && type !== 'unknown') {
+          if (type === 'cellular' && effectiveType) {
+            // 移动网络：组合类型和有效类型，如 "cellular-4g", "cellular-3g"
+            connectionType = `${type}-${effectiveType}`;
+          } else {
+            // 其他类型直接使用，如 "wifi", "ethernet", "bluetooth"
+            connectionType = type;
+          }
+        } else if (effectiveType) {
+          // 如果没有type但有effectiveType，使用effectiveType作为降级方案
+          // effectiveType主要用于移动网络（4g, 3g, 2g, slow-2g）
+          connectionType = effectiveType;
+        }
+        
         // downlink 单位是 Mbps，转换为字节/秒
         bandwidth = connection.downlink ? connection.downlink * 1024 * 1024 / 8 : 0;
       }

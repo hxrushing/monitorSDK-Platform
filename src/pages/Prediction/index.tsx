@@ -529,6 +529,7 @@ const Prediction: React.FC = () => {
                       pagination={false}
                       size="small"
                       rowKey="date"
+                      scroll={{ y: 400 }}
                     />
                     {result.modelInfo && (
                       <div style={{ marginTop: 16, fontSize: 12, color: '#666' }}>

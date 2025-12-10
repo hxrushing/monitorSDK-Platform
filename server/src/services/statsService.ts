@@ -107,26 +107,21 @@ export class StatsService {
         [projectId, today]
       );
 
-      // 获取平均停留时间（分钟）
+      // 获取平均停留时间（分钟）- 优化版本，使用更简单的查询
+      // 对于大数据量，这个查询可能很慢，使用简化版本
       const [avgDuration] = await this.db.execute(
         `SELECT 
-          ROUND(AVG(TIMESTAMPDIFF(MINUTE, 
-            first_visit.timestamp, 
-            last_visit.timestamp
-          )), 1) as avg_duration
+          ROUND(AVG(duration_minutes), 1) as avg_duration
         FROM (
-          SELECT user_id, MIN(timestamp) as timestamp
+          SELECT 
+            user_id,
+            TIMESTAMPDIFF(MINUTE, MIN(timestamp), MAX(timestamp)) as duration_minutes
           FROM events
           WHERE project_id = ? AND DATE(timestamp) = ?
           GROUP BY user_id
-        ) first_visit
-        JOIN (
-          SELECT user_id, MAX(timestamp) as timestamp
-          FROM events
-          WHERE project_id = ? AND DATE(timestamp) = ?
-          GROUP BY user_id
-        ) last_visit ON first_visit.user_id = last_visit.user_id`,
-        [projectId, today, projectId, today]
+          HAVING duration_minutes > 0
+        ) user_durations`,
+        [projectId, today]
       );
 
       const result = {

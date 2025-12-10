@@ -65,7 +65,10 @@ export interface TopProject {
 export const apiService = {
   // 获取统计数据
   async getStats(params: StatsQuery): Promise<StatsData[]> {
-    const data = await api.get('/stats', { params });
+    const data = await api.get('/stats', { 
+      params,
+      timeout: 60000  // 统计查询可能需要更长时间，设置为60秒
+    });
     return data.data;
   },
 
@@ -143,7 +146,8 @@ export const apiService = {
     avgDuration: number;
   }> {
     const data = await api.get('/dashboard/overview', {
-      params: { projectId }
+      params: { projectId },
+      timeout: 30000  // 大数据量时可能需要更长时间
     });
     return data.data;
   },
@@ -166,7 +170,10 @@ export const apiService = {
     startDate: string;
     endDate: string;
   }): Promise<TopProject[]> {
-    const data = await api.get('/top-projects', { params });
+    const data = await api.get('/top-projects', { 
+      params,
+      timeout: 30000  // 大数据量时可能需要更长时间
+    });
     return data.data;
   },
 

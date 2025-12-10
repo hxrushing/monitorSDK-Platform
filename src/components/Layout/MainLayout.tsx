@@ -17,9 +17,11 @@ import { Layout, Menu, Button, theme, Select, Modal, Form, Input, message, Dropd
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useTheme } from '@/hooks/useTheme';
 import { apiService, Project } from '@/services/api';
-import logo1 from '@/assets/logo1.png';
-import logo2 from '@/assets/logo2.png';
+import logo1 from '@/assets/logo1.jpg';
+import logo2 from '@/assets/logo2.jpg';
 import useGlobalStore from '@/store/globalStore';
+import OptimizedImage from '@/components/OptimizedImage';
+import PreloadResources from '@/components/PreloadResources';
 
 const { Header, Sider, Content } = Layout;
 const { Option } = Select;
@@ -49,6 +51,12 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   const userInfoRef = useRef<HTMLDivElement>(null);
   const logoRef = useRef<HTMLDivElement>(null);
   const [helpDrawerVisible, setHelpDrawerVisible] = useState(false);
+  // 缓存布局信息，避免频繁读取导致强制重排
+  const layoutCacheRef = useRef<{
+    userInfoRect: DOMRect | null;
+    lastUpdate: number;
+  }>({ userInfoRect: null, lastUpdate: 0 });
+  const rafIdRef = useRef<number | null>(null);
 
   useEffect(() => {
     console.log('当前用户信息:', userInfo);
@@ -277,57 +285,90 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
 
   const handleDragStart = () => {
     setIsDragging(true);
+    // 在拖拽开始时缓存布局信息，避免在拖拽过程中频繁读取
+    if (userInfoRef.current) {
+      layoutCacheRef.current.userInfoRect = userInfoRef.current.getBoundingClientRect();
+      layoutCacheRef.current.lastUpdate = Date.now();
+    }
   };
 
   const handleDrag = (e: React.DragEvent) => {
     if (!isDragging) return;
     
-    const logoRect = logoRef.current?.getBoundingClientRect();
-    const userInfoRect = userInfoRef.current?.getBoundingClientRect();
-    
-    if (logoRect && userInfoRect) {
-      // 计算logo中心点
-      const logoCenter = {
-        x: e.clientX,
-        y: e.clientY
-      };
-      
-      // 计算用户信息区域中心点
-      const userInfoCenter = {
-        x: userInfoRect.left + userInfoRect.width / 2,
-        y: userInfoRect.top + userInfoRect.height / 2
-      };
-      
-      // 计算距离
-      const distance = Math.sqrt(
-        Math.pow(logoCenter.x - userInfoCenter.x, 2) +
-        Math.pow(logoCenter.y - userInfoCenter.y, 2)
-      );
-      
-      // 调试信息
-      // console.log('Logo center:', logoCenter);
-      // console.log('UserInfo center:', userInfoCenter);
-      // console.log('Distance:', distance);
-      
-      // 当距离小于150像素时触发（增加触发范围）
-      if (distance < 150 && userInfo) {
-        message.success(`Welcome ${userInfo.username}!`);
-        setIsDragging(false);
-      }
+    // 使用 requestAnimationFrame 节流，避免频繁触发强制重排
+    if (rafIdRef.current !== null) {
+      cancelAnimationFrame(rafIdRef.current);
     }
+    
+    rafIdRef.current = requestAnimationFrame(() => {
+      // 只在必要时更新缓存（每100ms更新一次，或首次）
+      const now = Date.now();
+      const shouldUpdateCache = 
+        !layoutCacheRef.current.userInfoRect || 
+        (now - layoutCacheRef.current.lastUpdate) > 100;
+      
+      let userInfoRect = layoutCacheRef.current.userInfoRect;
+      
+      if (shouldUpdateCache && userInfoRef.current) {
+        // 批量读取布局属性，避免读写交替
+        userInfoRect = userInfoRef.current.getBoundingClientRect();
+        layoutCacheRef.current.userInfoRect = userInfoRect;
+        layoutCacheRef.current.lastUpdate = now;
+      }
+      
+      if (userInfoRect) {
+        // 计算logo中心点（使用事件坐标，不需要读取DOM）
+        const logoCenter = {
+          x: e.clientX,
+          y: e.clientY
+        };
+        
+        // 计算用户信息区域中心点（使用缓存的布局信息）
+        const userInfoCenter = {
+          x: userInfoRect.left + userInfoRect.width / 2,
+          y: userInfoRect.top + userInfoRect.height / 2
+        };
+        
+        // 计算距离
+        const distance = Math.sqrt(
+          Math.pow(logoCenter.x - userInfoCenter.x, 2) +
+          Math.pow(logoCenter.y - userInfoCenter.y, 2)
+        );
+        
+        // 当距离小于150像素时触发
+        if (distance < 150 && userInfo) {
+          message.success(`Welcome ${userInfo.username}!`);
+          setIsDragging(false);
+        }
+      }
+      
+      rafIdRef.current = null;
+    });
   };
 
   const handleDragEnd = () => {
     setIsDragging(false);
-    // 重置logo位置
-    if (logoRef.current) {
-      logoRef.current.style.transform = 'none';
+    // 取消待处理的动画帧
+    if (rafIdRef.current !== null) {
+      cancelAnimationFrame(rafIdRef.current);
+      rafIdRef.current = null;
     }
+    // 清除缓存
+    layoutCacheRef.current.userInfoRect = null;
+    layoutCacheRef.current.lastUpdate = 0;
+    // 重置logo位置（使用 requestAnimationFrame 确保在下一帧执行）
+    requestAnimationFrame(() => {
+      if (logoRef.current) {
+        logoRef.current.style.transform = 'none';
+      }
+    });
   };
 
   return (
-    <Layout style={{ minHeight: '100vh' }}>
-      <Sider 
+    <>
+      <PreloadResources />
+      <Layout style={{ minHeight: '100vh' }}>
+        <Sider 
         trigger={null} 
         collapsible 
         collapsed={collapsed} 
@@ -363,9 +404,14 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
             flexShrink: 0
           }}
         >
-          <img 
-            src={siteSettings.logoUrl || (collapsed ? logo1 : logo2)} 
-            alt="Logo" 
+          <OptimizedImage
+            src={siteSettings.logoUrl || (collapsed ? logo1 : logo2)}
+            alt="Logo"
+            width={collapsed ? 48 : 160}
+            height={48}
+            loading="eager"
+            isLCP={true}
+            fetchPriority="high"
             style={{ 
               height: '100%',
               width: collapsed ? '48px' : '160px',
@@ -574,7 +620,8 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
           </Form.Item>
         </Form>
       </Modal>
-    </Layout>
+      </Layout>
+    </>
   );
 };
 
