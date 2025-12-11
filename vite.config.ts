@@ -43,8 +43,7 @@ export default defineConfig({
     minify: 'esbuild',
     // 注意：esbuild 不支持 drop_console，如果需要移除 console，可以使用 terser
     // 但 esbuild 压缩速度更快，通常已经足够
-    // 启用 Tree Shaking
-    treeshake: true,
+    // Tree Shaking 默认启用，无需配置
     // 设置 chunk 大小警告阈值
     chunkSizeWarningLimit: 1000,
   },
@@ -61,10 +60,19 @@ export default defineConfig({
       // 包含 size-sensor，修复懒加载时的导入问题
       'size-sensor',
       // 包含 pdfast，修复导入问题
-      'pdfast'
+      'pdfast',
+      // 将 @ant-design/plots 也包含进来，确保其依赖（如 size-sensor）被正确预构建
+      // 这样可以避免懒加载时的 CommonJS 模块转换问题
+      '@ant-design/plots'
     ],
-    // 排除大型库，让它们按需加载
-    // 注意：虽然排除 @ant-design/plots，但需要包含其依赖
-    exclude: ['@ant-design/plots']
+    // 不再排除 @ant-design/plots，因为需要预构建其依赖
+    // exclude: ['@ant-design/plots'],
+    // 添加 esbuild 选项来处理 CommonJS
+    esbuildOptions: {
+      // 确保正确处理 CommonJS 模块
+      logOverride: { 'this-is-undefined-in-esm': 'silent' },
+      // 将 CommonJS 转换为 ES 模块
+      format: 'esm'
+    }
   }
 })

@@ -12,7 +12,7 @@
   },
   "dependencies": {
     "@ant-design/icons": "^5.6.1",
-    "@ant-design/plots": "^1.2.5",
+    "@ant-design/plots": "^1.2.6",
     "@types/axios": "^0.9.36",
     "@types/react-router-dom": "^5.3.3",
     "antd": "^5.0.0",

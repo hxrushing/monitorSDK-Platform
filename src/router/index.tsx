@@ -1,6 +1,7 @@
 // src/router/index.tsx
 import React, { Suspense, lazy } from 'react';
 import { createBrowserRouter, Navigate } from 'react-router-dom';
+import { RouteLoading } from '@/components/Loading';
 
 // 路由按需加载
 const Dashboard = lazy(() => import('@/pages/Dashboard'));
@@ -28,7 +29,7 @@ const Protected = ({ children }: { children: JSX.Element }) => {
 };
 
 const withSuspense = (node: JSX.Element) => (
-  <Suspense fallback={<div>加载中...</div>}>{node}</Suspense>
+  <Suspense fallback={<RouteLoading />}>{node}</Suspense>
 );
 
 const router = createBrowserRouter([

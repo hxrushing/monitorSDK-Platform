@@ -1,9 +1,8 @@
-import React, { useState, useEffect, Suspense  } from 'react';
+import React, { useState, useEffect, Suspense, useMemo, useCallback } from 'react';
 import { Card, Row, Col, DatePicker, Statistic, Spin, message, Table, Button, Space, Badge } from 'antd';
 const Line = React.lazy(() => import('@ant-design/plots').then(m => ({ default: m.Line })));
 import { 
   QuestionCircleOutlined, 
-  DashboardOutlined, 
   EyeOutlined, 
   UserOutlined, 
   FileTextOutlined, 
@@ -17,6 +16,8 @@ import type { TopProject } from '@/services/api';
 import FloatingPanel from '@/components/FloatingPanel';
 import useGlobalStore from '@/store/globalStore';
 import { adaptiveChartSampling } from '@/utils/dataSampling';
+import { ChartLoading } from '@/components/Loading';
+import { DashboardSkeleton } from '@/components/Skeleton';
 
 const { RangePicker } = DatePicker;
 
@@ -37,7 +38,7 @@ const Dashboard: React.FC = () => {
   const [showHelp, setShowHelp] = useState(false);
   const selectedProjectId = useGlobalStore(state => state.selectedProjectId);
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     if (!selectedProjectId) {
       return;
     }
@@ -116,22 +117,26 @@ const Dashboard: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [dateRange, selectedProjectId]);
 
   useEffect(() => {
     fetchData();
-  }, [dateRange, selectedProjectId]);
+  }, [fetchData]);
 
-  // 准备图表数据并应用LTTB采样
-  const chartData = statsData.map(item => [
-    { date: item.date, value: item.pv, type: 'PV' },
-    { date: item.date, value: item.uv, type: 'UV' }
-  ]).flat();
+  // 准备图表数据并应用LTTB采样 - 使用useMemo优化
+  const chartData = useMemo(() => {
+    return statsData.map(item => [
+      { date: item.date, value: item.pv, type: 'PV' },
+      { date: item.date, value: item.uv, type: 'UV' }
+    ]).flat();
+  }, [statsData]);
   
   // 使用LTTB算法进行智能采样，优化大数据量图表渲染性能
-  const sampledChartData = adaptiveChartSampling(chartData, 500, 1000, 'date', 'value', 'type');
+  const sampledChartData = useMemo(() => {
+    return adaptiveChartSampling(chartData, 500, 1000, 'date', 'value', 'type');
+  }, [chartData]);
 
-  const lineConfig = {
+  const lineConfig = useMemo(() => ({
     data: sampledChartData,
     xField: 'date',
     yField: 'value',
@@ -139,9 +144,9 @@ const Dashboard: React.FC = () => {
     smooth: true,
     animation: false,
     renderer: ('canvas' as 'canvas'),
-  };
+  }), [sampledChartData]);
 
-  const topProjectsColumns = [
+  const topProjectsColumns = useMemo(() => [
     {
       title: '项目名称',
       dataIndex: 'projectName',
@@ -159,7 +164,30 @@ const Dashboard: React.FC = () => {
       key: 'uniqueVisitors',
       sorter: (a: TopProject, b: TopProject) => a.uniqueVisitors - b.uniqueVisitors,
     },
-  ];
+  ], []);
+
+  // 计算统计数据 - 使用useMemo优化
+  const statsSummary = useMemo(() => {
+    return {
+      totalPV: statsData.reduce((sum, item) => sum + item.pv, 0),
+      totalUV: statsData.reduce((sum, item) => sum + item.uv, 0),
+    };
+  }, [statsData]);
+
+  const handleDateRangeChange = useCallback((dates: any) => {
+    if (dates && Array.isArray(dates) && dates.length === 2) {
+      setDateRange(dates as [dayjs.Dayjs, dayjs.Dayjs]);
+    }
+  }, []);
+
+  const toggleHelp = useCallback(() => {
+    setShowHelp(prev => !prev);
+  }, []);
+
+  // 如果正在加载且没有数据，显示骨架屏
+  if (loading && statsData.length === 0 && overview.todayPV === 0) {
+    return <DashboardSkeleton />;
+  }
 
   return (
     <Spin spinning={loading}>
@@ -184,8 +212,8 @@ const Dashboard: React.FC = () => {
               </ul>
               <p>📈 <strong>访问趋势</strong></p>
               <ul>
-                <li>最近7天PV：{statsData.reduce((sum, item) => sum + item.pv, 0)} 次</li>
-                <li>最近7天UV：{statsData.reduce((sum, item) => sum + item.uv, 0)} 人</li>
+                <li>最近7天PV：{statsSummary.totalPV} 次</li>
+                <li>最近7天UV：{statsSummary.totalUV} 人</li>
               </ul>
               <p>🏆 <strong>最活跃项目</strong></p>
               <ul>
@@ -197,7 +225,7 @@ const Dashboard: React.FC = () => {
               </ul>
               <Button 
                 type="link" 
-                onClick={() => setShowHelp(false)}
+                onClick={toggleHelp}
                 style={{ padding: 0, marginTop: 8 }}
               >
                 关闭面板
@@ -210,12 +238,12 @@ const Dashboard: React.FC = () => {
           <Space>
             <RangePicker
               value={dateRange}
-              onChange={(dates) => dates && setDateRange(dates as [dayjs.Dayjs, dayjs.Dayjs])}
+              onChange={handleDateRangeChange}
             />
             <Button
               type="text"
               icon={<QuestionCircleOutlined />}
-              onClick={() => setShowHelp(!showHelp)}
+              onClick={toggleHelp}
             >
               {showHelp ? '隐藏帮助' : '显示帮助'}
             </Button>
@@ -298,7 +326,7 @@ const Dashboard: React.FC = () => {
           } 
           style={{ marginTop: 16 }}
         >
-          <Suspense fallback={<div>图表加载中...</div>}>
+          <Suspense fallback={<ChartLoading />}>
             <Line {...lineConfig} />
           </Suspense>
         </Card>
