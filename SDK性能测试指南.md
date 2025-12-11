@@ -41,7 +41,7 @@
 cd server
 
 # 安装依赖（如果还没有）
-npm install axios
+pnpm install axios
 ```
 
 ### 3. 配置测试参数
@@ -348,7 +348,7 @@ node test_sdk_comprehensive.js
 **原因**：后端服务未启动或API地址不正确
 
 **解决方法**：
-1. 确认后端服务已启动：`cd server && npm start`
+1. 确认后端服务已启动：`cd server && pnpm start`
 2. 检查API地址：`http://localhost:3000/api`
 3. 检查项目ID是否存在
 

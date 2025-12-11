@@ -8,7 +8,7 @@
     "build": "tsc",
     "init-db": "node init-database.js",
     "drop-db": "node drop-database.js",
-    "reset-db": "npm run drop-db && npm run init-db"
+    "reset-db": "pnpm run drop-db && pnpm run init-db"
   },
   "dependencies": {
     "@types/node-cron": "^3.0.11",

@@ -57,7 +57,7 @@ OPENAI_MODEL=gpt-3.5-turbo
 
 ```bash
 cd server
-npm run init-db
+pnpm run init-db
 ```
 
 ### 4. 启动服务
@@ -65,10 +65,10 @@ npm run init-db
 ```bash
 # 启动后端服务
 cd server
-npm run dev
+pnpm run dev
 
 # 启动前端服务（另一个终端）
-npm run dev
+pnpm run dev
 ```
 
 ## 使用步骤

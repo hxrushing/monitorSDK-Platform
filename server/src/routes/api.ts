@@ -474,12 +474,16 @@ export function createApiRouter(db: Connection, summaryService?: SummaryService)
 
       const userId = (req as any).user?.sub; // 获取当前用户ID
       
+      console.log(`[预测请求] projectId: ${projectId}, metricType: ${metricType}, modelType: ${modelType || 'lstm'}, days: ${days || 7}`);
+      
       const result = await predictionService.predict({
         projectId,
         metricType: metricType || 'pv',
         modelType: modelType || 'lstm',
         days: days || 7
       });
+
+      console.log(`[预测结果] success: ${result.success}, error: ${result.error || 'none'}`);
 
       // 如果预测成功，自动保存记录
       if (result.success && result.predictions) {
@@ -494,18 +498,26 @@ export function createApiRouter(db: Connection, summaryService?: SummaryService)
             historicalData: result.historicalData,
             modelInfo: result.modelInfo
           });
-        } catch (saveError) {
+          console.log('[预测记录] 保存成功');
+        } catch (saveError: any) {
           // 保存失败不影响预测结果返回，只记录日志
-          console.error('保存预测记录失败:', saveError);
+          console.error('[预测记录] 保存失败:', saveError.message || saveError);
         }
+      }
+
+      // 如果预测失败，返回错误但使用200状态码（因为result中已包含错误信息）
+      if (!result.success) {
+        return res.status(200).json(result);
       }
 
       res.json(result);
     } catch (error: any) {
-      console.error('预测失败:', error);
+      console.error('[预测路由] 捕获异常:', error);
+      console.error('[预测路由] 错误堆栈:', error.stack);
       res.status(500).json({ 
         success: false, 
-        error: error.message || 'Internal Server Error' 
+        error: error.message || 'Internal Server Error',
+        details: process.env.NODE_ENV === 'development' ? error.stack : undefined
       });
     }
   });

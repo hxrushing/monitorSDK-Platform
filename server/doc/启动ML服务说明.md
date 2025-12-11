@@ -100,11 +100,11 @@ ML_SERVICE_URL=http://127.0.0.1:5000
 3. **启动后端服务**：
    ```bash
    cd server
-   npm run dev
+   pnpm run dev
    ```
 4. **启动前端服务**：
    ```bash
-   npm run dev
+   pnpm run dev
    ```
 
 ## 测试连接

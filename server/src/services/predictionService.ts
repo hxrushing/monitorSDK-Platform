@@ -118,24 +118,31 @@ export class PredictionService {
     request: PredictionRequest
   ): Promise<PredictionResponse> {
     try {
+      console.log(`[PredictionService] 开始预测: ${JSON.stringify(request)}`);
+      
       // 获取历史数据
+      console.log(`[PredictionService] 获取历史数据: projectId=${request.projectId}, days=${request.days + 14}`);
       const historicalData = await this.getHistoricalData(
         request.projectId,
         request.days + 14 // 至少需要14天历史数据
       );
+      console.log(`[PredictionService] 获取到 ${historicalData.length} 天历史数据`);
 
       if (historicalData.length < 14) {
+        const errorMsg = `历史数据不足，至少需要14天，当前只有${historicalData.length}天`;
+        console.warn(`[PredictionService] ${errorMsg}`);
         return {
           success: false,
           projectId: request.projectId,
           metricType: request.metricType,
           modelType: request.modelType,
           predictions: [],
-          error: `历史数据不足，至少需要14天，当前只有${historicalData.length}天`
+          error: errorMsg
         };
       }
 
       // 调用ML服务进行预测
+      console.log(`[PredictionService] 调用ML服务: ${this.mlServiceUrl}/predict`);
       const response = await axios.post(
         `${this.mlServiceUrl}/predict`,
         {
@@ -154,19 +161,38 @@ export class PredictionService {
         }
       );
 
+      console.log(`[PredictionService] ML服务响应成功`);
       return response.data;
     } catch (error: any) {
-      console.error('预测失败:', error);
+      console.error('[PredictionService] 预测失败:', error);
+      console.error('[PredictionService] 错误代码:', error.code);
+      console.error('[PredictionService] 错误消息:', error.message);
+      if (error.response) {
+        console.error('[PredictionService] 响应状态:', error.response.status);
+        console.error('[PredictionService] 响应数据:', error.response.data);
+      }
       
       // 如果ML服务不可用，返回错误信息
-      if (error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT') {
+      if (error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT' || error.code === 'ENOTFOUND') {
         return {
           success: false,
           projectId: request.projectId,
           metricType: request.metricType,
           modelType: request.modelType,
           predictions: [],
-          error: 'ML预测服务不可用，请确保服务已启动'
+          error: `ML预测服务不可用 (${error.code})，请确保服务已启动在 ${this.mlServiceUrl}`
+        };
+      }
+
+      // 如果是数据库错误
+      if (error.message?.includes('Failed to get historical data')) {
+        return {
+          success: false,
+          projectId: request.projectId,
+          metricType: request.metricType,
+          modelType: request.modelType,
+          predictions: [],
+          error: `获取历史数据失败: ${error.message}`
         };
       }
 

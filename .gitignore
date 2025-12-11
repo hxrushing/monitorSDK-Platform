@@ -7,6 +7,10 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# Lock files (keep pnpm-lock.yaml, ignore others)
+package-lock.json
+yarn.lock
+
 node_modules
 dist
 dist-ssr
@@ -27,3 +31,4 @@ dist-ssr
 server/.env
 server/.env.local
 server/.env.prod
+src/docs
