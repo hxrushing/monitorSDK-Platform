@@ -2,6 +2,7 @@
 import React, { Suspense, lazy } from 'react';
 import { createBrowserRouter, Navigate } from 'react-router-dom';
 import { RouteLoading } from '@/components/Loading';
+import RouteErrorBoundary from '@/components/RouteErrorBoundary';
 
 // 路由按需加载
 const Dashboard = lazy(() => import('@/pages/Dashboard'));
@@ -36,10 +37,12 @@ const router = createBrowserRouter([
   {
     path: '/',
     element: withSuspense(<Login />),
+    errorElement: <RouteErrorBoundary />,
   },
   {
     path: '/login',
     element: withSuspense(<Login />),
+    errorElement: <RouteErrorBoundary />,
   },
   {
     path: '/app',
@@ -48,56 +51,69 @@ const router = createBrowserRouter([
         <App />
       </Protected>
     ),
+    errorElement: <RouteErrorBoundary />,
     children: [
       {
         path: 'dashboard',
         element: withSuspense(<Dashboard />),
+        errorElement: <RouteErrorBoundary />,
       },
       {
         path: 'events',
         element: withSuspense(<EventAnalysis />),
+        errorElement: <RouteErrorBoundary />,
       },
       {
         path: 'funnel',
         element: withSuspense(<FunnelAnalysis />),
+        errorElement: <RouteErrorBoundary />,
       },
       {
         path: 'event-management',
         element: withSuspense(<EventManagement />),
+        errorElement: <RouteErrorBoundary />,
       },
       {
         path: 'member-management',
         element: withSuspense(<MemberManagement />),
+        errorElement: <RouteErrorBoundary />,
       },
       {
         path: 'sdk-demo',
         element: withSuspense(<SDKDemo />),
+        errorElement: <RouteErrorBoundary />,
       },
       {
         path: 'sdk-module',
         element: withSuspense(<SDKModule />),
+        errorElement: <RouteErrorBoundary />,
       },
       {
         path: 'settings',
         element: withSuspense(<SystemSettings />),
+        errorElement: <RouteErrorBoundary />,
       },
       {
         path: 'ai-summary',
         element: withSuspense(<AISummarySettings />),
+        errorElement: <RouteErrorBoundary />,
       },
       {
         path: 'prediction',
         element: withSuspense(<Prediction />),
+        errorElement: <RouteErrorBoundary />,
       },
       {
         path: 'prediction/history',
         element: withSuspense(<PredictionHistory />),
+        errorElement: <RouteErrorBoundary />,
       },
     ],
   },
   {
     path: '/register',
     element: withSuspense(<Register />),
+    errorElement: <RouteErrorBoundary />,
   }
 ]);
 

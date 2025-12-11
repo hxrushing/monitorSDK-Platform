@@ -6,6 +6,7 @@ import zhCN from 'antd/locale/zh_CN'
 import router from './router'
 import './index.css'
 import useGlobalStore from '@/store/globalStore'
+import ErrorBoundary from '@/components/ErrorBoundary'
 import logo1 from '@/assets/logo1.jpg'
 import logo2 from '@/assets/logo2.jpg'
 
@@ -62,6 +63,8 @@ const Root = () => {
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <Root />
+    <ErrorBoundary>
+      <Root />
+    </ErrorBoundary>
   </React.StrictMode>
 )

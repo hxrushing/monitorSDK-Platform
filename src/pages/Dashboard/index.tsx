@@ -22,9 +22,10 @@ import { DashboardSkeleton } from '@/components/Skeleton';
 const { RangePicker } = DatePicker;
 
 const Dashboard: React.FC = () => {
+  // 默认显示最近30天，确保包含今天的数据
   const [dateRange, setDateRange] = useState<[dayjs.Dayjs, dayjs.Dayjs]>([
-    dayjs().subtract(7, 'day'),
-    dayjs()
+    dayjs().subtract(7, 'day').startOf('day'), // 30天前（包含今天共30天）
+    dayjs().endOf('day') // 今天结束时间，确保包含今天的所有数据
   ]);
   const [loading, setLoading] = useState(false);
   const [statsData, setStatsData] = useState<any[]>([]);
@@ -59,18 +60,22 @@ const Dashboard: React.FC = () => {
       const hideLoading = message.loading('正在加载数据，请稍候...', 0);
       
       try {
+        // 确保日期格式正确，使用 startOf('day') 和 endOf('day') 确保包含完整日期范围
+        const startDate = dateRange[0].startOf('day').format('YYYY-MM-DD');
+        const endDate = dateRange[1].endOf('day').format('YYYY-MM-DD');
+        
         // 使用 Promise.allSettled 避免一个失败导致全部失败
         const results = await Promise.allSettled([
           apiService.getStats({
             projectId: selectedProjectId,
-            startDate: dateRange[0].format('YYYY-MM-DD'),
-            endDate: dateRange[1].format('YYYY-MM-DD')
+            startDate,
+            endDate
           }),
           apiService.getDashboardOverview(selectedProjectId),
           apiService.getTopProjects({
             projectId: selectedProjectId,
-            startDate: dateRange[0].format('YYYY-MM-DD'),
-            endDate: dateRange[1].format('YYYY-MM-DD')
+            startDate,
+            endDate
           })
         ]);
         
@@ -176,7 +181,12 @@ const Dashboard: React.FC = () => {
 
   const handleDateRangeChange = useCallback((dates: any) => {
     if (dates && Array.isArray(dates) && dates.length === 2) {
-      setDateRange(dates as [dayjs.Dayjs, dayjs.Dayjs]);
+      // 确保开始日期是当天的开始，结束日期是当天的结束
+      const start = (dates[0] as dayjs.Dayjs).startOf('day');
+      const end = (dates[1] as dayjs.Dayjs).endOf('day');
+      // 如果结束日期是今天或未来，确保使用今天的结束时间
+      const endDate = end.isAfter(dayjs()) ? dayjs().endOf('day') : end;
+      setDateRange([start, endDate]);
     }
   }, []);
 
@@ -239,6 +249,11 @@ const Dashboard: React.FC = () => {
             <RangePicker
               value={dateRange}
               onChange={handleDateRangeChange}
+              allowClear={false}
+              disabledDate={(current) => {
+                // 不允许选择未来日期
+                return current && current > dayjs().endOf('day');
+              }}
             />
             <Button
               type="text"
