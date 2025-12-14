@@ -18,6 +18,7 @@ import useGlobalStore from '@/store/globalStore';
 import { adaptiveChartSampling } from '@/utils/dataSampling';
 import { ChartLoading } from '@/components/Loading';
 import { DashboardSkeleton } from '@/components/Skeleton';
+import StatisticCard from '@/components/StatisticCard';
 
 const { RangePicker } = DatePicker;
 
@@ -267,68 +268,60 @@ const Dashboard: React.FC = () => {
 
         <Row gutter={[16, 16]}>
           <Col span={6}>
-            <Card>
-              <Statistic
-                title={
-                  <Space>
-                    <EyeOutlined style={{ color: '#1890ff' }} />
-                    <span>今日PV</span>
-                    <Badge count={overview.todayPV > 1000 ? 'HOT' : 0} style={{ backgroundColor: '#52c41a' }} />
-                  </Space>
-                }
-                value={overview.todayPV}
-                suffix="次"
-                valueStyle={{ color: '#1890ff' }}
-              />
-            </Card>
+            <StatisticCard
+              title={
+                <Space>
+                  <EyeOutlined style={{ color: '#1890ff' }} />
+                  <span>今日PV</span>
+                </Space>
+              }
+              value={overview.todayPV}
+              suffix="次"
+              valueStyle={{ color: '#1890ff' }}
+              badge={overview.todayPV > 1000 ? { count: 'HOT', style: { backgroundColor: '#52c41a' } } : undefined}
+            />
           </Col>
           <Col span={6}>
-            <Card>
-              <Statistic
-                title={
-                  <Space>
-                    <UserOutlined style={{ color: '#52c41a' }} />
-                    <span>今日UV</span>
-                    <Badge count={overview.todayUV > 500 ? 'NEW' : 0} style={{ backgroundColor: '#fa8c16' }} />
-                  </Space>
-                }
-                value={overview.todayUV}
-                suffix="人"
-                valueStyle={{ color: '#52c41a' }}
-              />
-            </Card>
+            <StatisticCard
+              title={
+                <Space>
+                  <UserOutlined style={{ color: '#52c41a' }} />
+                  <span>今日UV</span>
+                </Space>
+              }
+              value={overview.todayUV}
+              suffix="人"
+              valueStyle={{ color: '#52c41a' }}
+              badge={overview.todayUV > 500 ? { count: 'NEW', style: { backgroundColor: '#fa8c16' } } : undefined}
+            />
           </Col>
           <Col span={6}>
-            <Card>
-              <Statistic
-                title={
-                  <Space>
-                    <FileTextOutlined style={{ color: '#722ed1' }} />
-                    <span>人均访问页面</span>
-                  </Space>
-                }
-                value={overview.avgPages}
-                precision={2}
-                suffix="页"
-                valueStyle={{ color: '#722ed1' }}
-              />
-            </Card>
+            <StatisticCard
+              title={
+                <Space>
+                  <FileTextOutlined style={{ color: '#722ed1' }} />
+                  <span>人均访问页面</span>
+                </Space>
+              }
+              value={overview.avgPages}
+              precision={2}
+              suffix="页"
+              valueStyle={{ color: '#722ed1' }}
+            />
           </Col>
           <Col span={6}>
-            <Card>
-              <Statistic
-                title={
-                  <Space>
-                    <ClockCircleOutlined style={{ color: '#fa8c16' }} />
-                    <span>平均停留时间</span>
-                  </Space>
-                }
-                value={overview.avgDuration}
-                precision={1}
-                suffix="分钟"
-                valueStyle={{ color: '#fa8c16' }}
-              />
-            </Card>
+            <StatisticCard
+              title={
+                <Space>
+                  <ClockCircleOutlined style={{ color: '#fa8c16' }} />
+                  <span>平均停留时间</span>
+                </Space>
+              }
+              value={overview.avgDuration}
+              precision={1}
+              suffix="分钟"
+              valueStyle={{ color: '#fa8c16' }}
+            />
           </Col>
         </Row>
 

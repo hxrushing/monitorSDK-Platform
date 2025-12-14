@@ -1,4 +1,4 @@
-import React, { useState, useEffect, Suspense } from 'react';
+import React, { useState, useEffect, Suspense, useMemo, useCallback } from 'react';
 import {
   Card,
   Table,
@@ -97,8 +97,8 @@ const PredictionHistory: React.FC = () => {
     fetchRecords();
   }, [selectedProjectId, page, pageSize, metricType, modelType, dateRange]);
 
-  // 删除记录
-  const handleDelete = async (id: string) => {
+  // 删除记录 - 使用 useCallback 优化
+  const handleDelete = useCallback(async (id: string) => {
     try {
       await apiService.deletePredictionRecord(id);
       message.success('删除成功');
@@ -107,10 +107,10 @@ const PredictionHistory: React.FC = () => {
       console.error('删除记录失败:', error);
       message.error('删除失败');
     }
-  };
+  }, []);
 
-  // 查看详情
-  const handleViewDetail = async (id: string) => {
+  // 查看详情 - 使用 useCallback 优化
+  const handleViewDetail = useCallback(async (id: string) => {
     try {
       const record = await apiService.getPredictionRecord(id);
       setSelectedRecord(record);
@@ -119,7 +119,7 @@ const PredictionHistory: React.FC = () => {
       console.error('获取记录详情失败:', error);
       message.error('获取记录详情失败');
     }
-  };
+  }, []);
 
   // 获取指标名称
   const getMetricName = (metric: string) => {
@@ -131,8 +131,8 @@ const PredictionHistory: React.FC = () => {
     return names[metric] || metric;
   };
 
-  // 表格列定义
-  const columns = [
+  // 表格列定义 - 使用 useMemo 缓存
+  const columns = useMemo(() => [
     {
       title: '预测时间',
       dataIndex: 'createdAt',
@@ -199,10 +199,10 @@ const PredictionHistory: React.FC = () => {
         </Space>
       ),
     },
-  ];
+  ], []);
 
-  // 准备图表数据
-  const prepareChartData = (record: PredictionRecord) => {
+  // 准备图表数据 - 使用 useMemo 优化
+  const prepareChartData = useCallback((record: PredictionRecord) => {
     if (!record.predictions || !record.historicalData) {
       return [];
     }
@@ -223,7 +223,7 @@ const PredictionHistory: React.FC = () => {
     
     // 使用LTTB算法进行智能采样，优化大数据量图表渲染性能
     return adaptiveChartSampling(allData, 500, 1000, 'date', 'value', 'type');
-  };
+  }, []);
 
   return (
     <div>
@@ -250,7 +250,7 @@ const PredictionHistory: React.FC = () => {
             <div style={{ marginBottom: 8 }}>预测指标：</div>
             <Select
               value={metricType}
-              onChange={setMetricType}
+              onChange={useCallback((value: string) => setMetricType(value), [])}
               allowClear
               placeholder="全部"
               style={{ width: '100%' }}
@@ -264,7 +264,7 @@ const PredictionHistory: React.FC = () => {
             <div style={{ marginBottom: 8 }}>预测模型：</div>
             <Select
               value={modelType}
-              onChange={setModelType}
+              onChange={useCallback((value: string) => setModelType(value), [])}
               allowClear
               placeholder="全部"
               style={{ width: '100%' }}
@@ -277,7 +277,9 @@ const PredictionHistory: React.FC = () => {
             <div style={{ marginBottom: 8 }}>预测时间：</div>
             <RangePicker
               value={dateRange}
-              onChange={(dates) => setDateRange(dates as [dayjs.Dayjs, dayjs.Dayjs] | null)}
+              onChange={useCallback((dates: any) => {
+                setDateRange(dates as [dayjs.Dayjs, dayjs.Dayjs] | null);
+              }, [])}
               style={{ width: '100%' }}
             />
           </Col>
@@ -300,7 +302,7 @@ const PredictionHistory: React.FC = () => {
             total: total,
             showSizeChanger: true,
             showTotal: (total) => `共 ${total} 条记录`,
-            onChange: (page, pageSize) => {
+            onChange: (page: number, pageSize: number) => {
               setPage(page);
               setPageSize(pageSize);
             },

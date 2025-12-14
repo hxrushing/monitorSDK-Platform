@@ -1,4 +1,4 @@
-import React, { useState, useEffect, Suspense } from 'react';
+import React, { useState, useEffect, Suspense, useMemo, useCallback, memo } from 'react';
 import { Card, Row, Col, DatePicker, Select, Table, Button, Spin, message, Space, Badge } from 'antd';
 // 懒加载图表组件，减少初始 bundle 大小
 const Line = React.lazy(() => import('@ant-design/plots').then(m => ({ default: m.Line })));
@@ -82,11 +82,22 @@ const EventAnalysis: React.FC = () => {
     }
   }, [selectedProjectId, selectedEvents]);
 
-  const handleSearch = () => {
+  const handleSearch = useCallback(() => {
     fetchAnalysisData();
-  };
+  }, [selectedProjectId, dateRange, selectedEvents]);
 
-  const columns = [
+  const handleDateRangeChange = useCallback((dates: any) => {
+    if (dates) {
+      setDateRange(dates as [dayjs.Dayjs, dayjs.Dayjs]);
+    }
+  }, []);
+
+  const handleEventsChange = useCallback((value: string[]) => {
+    setSelectedEvents(value);
+  }, []);
+
+  // 使用 useMemo 缓存列配置，避免每次渲染都重新创建
+  const columns = useMemo(() => [
     {
       title: (
         <Space>
@@ -146,19 +157,23 @@ const EventAnalysis: React.FC = () => {
       render: (text: number) => text.toFixed(2),
       sorter: (a: any, b: any) => a.avgPerUser - b.avgPerUser,
     },
-  ];
+  ], [eventOptions]);
 
-  // 准备图表数据并应用LTTB采样
-  const chartData = analysisData.map(item => ({
-    date: item.date,
-    value: item.count,
-    type: eventOptions.find(e => e.eventName === item.eventName)?.description || item.eventName
-  }));
+  // 准备图表数据并应用LTTB采样 - 使用 useMemo 优化
+  const chartData = useMemo(() => {
+    return analysisData.map(item => ({
+      date: item.date,
+      value: item.count,
+      type: eventOptions.find(e => e.eventName === item.eventName)?.description || item.eventName
+    }));
+  }, [analysisData, eventOptions]);
   
   // 使用LTTB算法进行智能采样，优化大数据量图表渲染性能
-  const sampledChartData = adaptiveChartSampling(chartData, 500, 1000, 'date', 'value', 'type');
+  const sampledChartData = useMemo(() => {
+    return adaptiveChartSampling(chartData, 500, 1000, 'date', 'value', 'type');
+  }, [chartData]);
 
-  const lineConfig = {
+  const lineConfig = useMemo(() => ({
     data: sampledChartData,
     xField: 'date',
     yField: 'value',
@@ -166,7 +181,7 @@ const EventAnalysis: React.FC = () => {
     smooth: true,
     animation: false,
     renderer: ('canvas' as 'canvas'),
-  };
+  }), [sampledChartData]);
 
   return (
     <Spin spinning={loading}>
@@ -178,7 +193,7 @@ const EventAnalysis: React.FC = () => {
                 <CalendarOutlined style={{ color: '#1890ff' }} />
                 <RangePicker
                   value={dateRange}
-                  onChange={(dates) => dates && setDateRange(dates as [dayjs.Dayjs, dayjs.Dayjs])}
+                  onChange={handleDateRangeChange}
                 />
               </Space>
             </Col>
@@ -194,7 +209,7 @@ const EventAnalysis: React.FC = () => {
                     value: event.eventName
                   }))}
                   value={selectedEvents}
-                  onChange={setSelectedEvents}
+                  onChange={handleEventsChange}
                 />
               </Space.Compact>
             </Col>
