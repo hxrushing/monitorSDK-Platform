@@ -1,4 +1,5 @@
 import OpenAI from 'openai';
+import { encoding_for_model, get_encoding, type Tiktoken } from 'tiktoken';
 
 export interface SummaryData {
   projectId: string;
@@ -26,7 +27,11 @@ export class AIService {
   // 配置常量
   private readonly MAX_PROJECTS_PER_BATCH = parseInt(process.env.AI_MAX_PROJECTS_PER_BATCH || '10'); // 每批最多处理的项目数
   private readonly MAX_PROMPT_TOKENS = parseInt(process.env.AI_MAX_PROMPT_TOKENS || '3000'); // 最大 prompt token 数（保守估计）
-  private readonly ESTIMATED_CHARS_PER_TOKEN = 3; // 粗略估算：1 token ≈ 3-4 字符（中文）
+  private readonly ESTIMATED_CHARS_PER_TOKEN = 3; // 降级方案：粗略估算：1 token ≈ 3-4 字符（中文）
+  
+  // Token 编码器缓存
+  private encoderCache: Map<string, Tiktoken> = new Map();
+  private useAccurateTokenEstimation: boolean = true;
 
   constructor() {
     const apiKey = process.env.OPENAI_API_KEY;
@@ -84,12 +89,119 @@ export class AIService {
   }
 
   /**
-   * 估算 prompt 的 token 数量（粗略估算）
+   * 获取指定模型的 token 编码器
    */
-  private estimateTokens(text: string): number {
-    // 粗略估算：中文约 1.5-2 字符/token，英文约 4 字符/token
-    // 这里使用保守估算：平均 3 字符/token
-    return Math.ceil(text.length / this.ESTIMATED_CHARS_PER_TOKEN);
+  private getEncoder(model: string): Tiktoken | null {
+    try {
+      // 尝试从缓存获取
+      if (this.encoderCache.has(model)) {
+        return this.encoderCache.get(model)!;
+      }
+
+      // 根据模型名称获取对应的编码器
+      // tiktoken 支持多种模型，这里处理常见的模型
+      let encoder: Tiktoken | null = null;
+
+      // 尝试使用 encoding_for_model（推荐方式）
+      try {
+        encoder = encoding_for_model(model as any);
+      } catch (error) {
+        // 如果模型名称不被识别，尝试使用默认编码器
+        console.warn(`[AIService] 无法识别模型 ${model}，使用默认编码器`);
+        try {
+          // 对于 gpt-3.5-turbo 和 gpt-4，使用 cl100k_base 编码
+          encoder = get_encoding('cl100k_base');
+        } catch (e) {
+          console.error('[AIService] 无法初始化编码器:', e);
+          return null;
+        }
+      }
+
+      // 缓存编码器
+      if (encoder) {
+        this.encoderCache.set(model, encoder);
+      }
+
+      return encoder;
+    } catch (error) {
+      console.error('[AIService] 获取编码器失败:', error);
+      return null;
+    }
+  }
+
+  /**
+   * 估算 prompt 的 token 数量（使用 tiktoken 进行准确估算）
+   * @param text 要估算的文本
+   * @param model 模型名称（可选，用于选择正确的编码器）
+   * @returns token 数量
+   */
+  private estimateTokens(text: string, model?: string): number {
+    // 如果禁用了准确估算，使用降级方案
+    if (!this.useAccurateTokenEstimation) {
+      return Math.ceil(text.length / this.ESTIMATED_CHARS_PER_TOKEN);
+    }
+
+    // 获取模型名称（默认使用环境变量中的模型）
+    const modelName = model || process.env.OPENAI_MODEL || 'gpt-3.5-turbo';
+    
+    try {
+      const encoder = this.getEncoder(modelName);
+      
+      if (encoder) {
+        // 使用 tiktoken 进行准确的 token 计数
+        const tokens = encoder.encode(text);
+        const count = tokens.length;
+        
+        // 释放编码器（tiktoken 编码器不需要手动释放，但我们可以记录使用情况）
+        return count;
+      } else {
+        // 如果无法获取编码器，降级到简单估算
+        console.warn('[AIService] 无法获取编码器，使用降级方案估算 token');
+        this.useAccurateTokenEstimation = false;
+        return Math.ceil(text.length / this.ESTIMATED_CHARS_PER_TOKEN);
+      }
+    } catch (error) {
+      // 如果 tiktoken 出现任何错误，降级到简单估算
+      console.error('[AIService] Token 估算失败，使用降级方案:', error);
+      this.useAccurateTokenEstimation = false;
+      return Math.ceil(text.length / this.ESTIMATED_CHARS_PER_TOKEN);
+    }
+  }
+
+  /**
+   * 估算消息数组的总 token 数量（包括 system 和 user 消息）
+   */
+  private estimateMessagesTokens(messages: Array<{ role: string; content: string }>, model?: string): number {
+    const modelName = model || process.env.OPENAI_MODEL || 'gpt-3.5-turbo';
+    
+    try {
+      const encoder = this.getEncoder(modelName);
+      
+      if (encoder) {
+        // 计算所有消息的 token 数
+        // 注意：每个消息还需要额外的格式 token（约 4 tokens per message）
+        let totalTokens = 0;
+        
+        for (const message of messages) {
+          const contentTokens = encoder.encode(message.content).length;
+          // 每条消息大约需要 4 个额外 token（role, content 等格式）
+          totalTokens += contentTokens + 4;
+        }
+        
+        // 最后还需要 2 个 token 用于结束
+        totalTokens += 2;
+        
+        return totalTokens;
+      } else {
+        // 降级方案：简单估算
+        const totalText = messages.map(m => m.content).join(' ');
+        return Math.ceil(totalText.length / this.ESTIMATED_CHARS_PER_TOKEN) + messages.length * 4 + 2;
+      }
+    } catch (error) {
+      // 降级方案
+      const totalText = messages.map(m => m.content).join(' ');
+      return Math.ceil(totalText.length / this.ESTIMATED_CHARS_PER_TOKEN) + messages.length * 4 + 2;
+    }
   }
 
   /**
@@ -100,9 +212,11 @@ export class AIService {
     let currentBatch: SummaryData[] = [];
     let currentBatchTokens = 0;
 
+    const model = process.env.OPENAI_MODEL || 'gpt-3.5-turbo';
+    
     for (const project of data) {
       const projectPrompt = this.buildPrompt([project]);
-      const projectTokens = this.estimateTokens(projectPrompt);
+      const projectTokens = this.estimateTokens(projectPrompt, model);
 
       // 如果单个项目就超过限制，仍然添加（至少保证每个项目都能处理）
       if (currentBatch.length >= this.MAX_PROJECTS_PER_BATCH || 
@@ -135,7 +249,19 @@ export class AIService {
     }
 
     // 如果数据量太大，进行分批处理
-    const estimatedTotalTokens = this.estimateTokens(this.buildPrompt(data));
+    const model = process.env.OPENAI_MODEL || 'gpt-3.5-turbo';
+    const prompt = this.buildPrompt(data);
+    const systemMessage = '你是一个专业的数据分析助手，擅长用简洁、专业的中文总结数据分析结果。';
+    
+    // 使用更准确的 token 估算（包括 system 和 user 消息）
+    const estimatedTotalTokens = this.estimateMessagesTokens(
+      [
+        { role: 'system', content: systemMessage },
+        { role: 'user', content: prompt }
+      ],
+      model
+    );
+    
     const needsBatching = data.length > this.MAX_PROJECTS_PER_BATCH || estimatedTotalTokens > this.MAX_PROMPT_TOKENS;
 
     if (needsBatching) {
@@ -146,9 +272,18 @@ export class AIService {
     try {
       const prompt = this.buildPrompt(data);
       const model = process.env.OPENAI_MODEL || 'gpt-3.5-turbo';
-      const actualTokens = this.estimateTokens(prompt);
+      const systemMessage = '你是一个专业的数据分析助手，擅长用简洁、专业的中文总结数据分析结果。';
+      
+      // 使用更准确的 token 估算
+      const actualTokens = this.estimateMessagesTokens(
+        [
+          { role: 'system', content: systemMessage },
+          { role: 'user', content: prompt }
+        ],
+        model
+      );
 
-      console.log(`[AIService] 生成总结，数据量：${data.length} 个项目，约 ${actualTokens} tokens`);
+      console.log(`[AIService] 生成总结，数据量：${data.length} 个项目，约 ${actualTokens} tokens（使用${this.useAccurateTokenEstimation ? '准确' : '降级'}估算）`);
 
       const completion = await this.generateWithRetry(() =>
         this.client!.chat.completions.create({
@@ -203,6 +338,17 @@ export class AIService {
       try {
         const prompt = this.buildPrompt(batch);
         const model = process.env.OPENAI_MODEL || 'gpt-3.5-turbo';
+        const systemMessage = '你是一个专业的数据分析助手，擅长用简洁、专业的中文总结数据分析结果。';
+        
+        // 记录该批次的 token 估算
+        const batchTokens = this.estimateMessagesTokens(
+          [
+            { role: 'system', content: systemMessage },
+            { role: 'user', content: prompt }
+          ],
+          model
+        );
+        console.log(`[AIService] 第 ${i + 1} 批 token 估算：约 ${batchTokens} tokens`);
 
         const completion = await this.generateWithRetry(() =>
           this.client!.chat.completions.create({
@@ -251,10 +397,22 @@ export class AIService {
     const combinedSummary = summaries.join('\n\n---\n\n');
     
     // 如果合并后的总结太长，尝试让 AI 再次总结
-    if (this.estimateTokens(combinedSummary) > 2000) {
+    const model = process.env.OPENAI_MODEL || 'gpt-3.5-turbo';
+    const combinedTokens = this.estimateTokens(combinedSummary, model);
+    
+    if (combinedTokens > 2000) {
       try {
         const finalPrompt = `以下是多个项目的数据总结，请生成一份简洁的总览报告：\n\n${combinedSummary}\n\n请用简洁的中文总结关键信息。`;
-        const model = process.env.OPENAI_MODEL || 'gpt-3.5-turbo';
+        const systemMessage = '你是一个专业的数据分析助手，擅长用简洁、专业的中文总结数据分析结果。';
+        
+        const finalTokens = this.estimateMessagesTokens(
+          [
+            { role: 'system', content: systemMessage },
+            { role: 'user', content: finalPrompt }
+          ],
+          model
+        );
+        console.log(`[AIService] 合并总结 token 数：${combinedTokens}，生成总览 token 估算：${finalTokens}`);
         
         const completion = await this.generateWithRetry(() =>
           this.client!.chat.completions.create({

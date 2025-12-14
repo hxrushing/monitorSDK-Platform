@@ -41,6 +41,9 @@ importers:
       react-router-dom:
         specifier: ^7.3.0
         version: 7.10.1(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      tiktoken:
+        specifier: ^1.0.22
+        version: 1.0.22
       uuid:
         specifier: ^9.0.0
         version: 9.0.1
@@ -2228,6 +2231,9 @@ packages:
   throttle-debounce@5.0.2:
     resolution: {integrity: sha512-B71/4oyj61iNH0KeCamLuE2rmKuTO5byTOSVwECM5FA7TiAiAW+UqTKZ9ERueC4qvgSttUhdmq1mXC3kJqGX7A==}
     engines: {node: '>=12.22'}
+
+  tiktoken@1.0.22:
+    resolution: {integrity: sha512-PKvy1rVF1RibfF3JlXBSP0Jrcw2uq3yXdgcEXtKTYn3QJ/cBRBHDnrJ5jHky+MENZ6DIPwNUGWpkVx+7joCpNA==}
 
   to-regex-range@5.0.1:
     resolution: {integrity: sha512-65P7iz6X5yEr1cwcgvQxbbIw7Uk3gOy5dIdtZ4rDveLqhrdJP+Li/Hx6tyK0NEb+2GCyneCMJiGqrADCSNk8sQ==}
@@ -4897,6 +4903,8 @@ snapshots:
   text-table@0.2.0: {}
 
   throttle-debounce@5.0.2: {}
+
+  tiktoken@1.0.22: {}
 
   to-regex-range@5.0.1:
     dependencies:
