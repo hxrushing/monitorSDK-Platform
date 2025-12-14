@@ -20,6 +20,7 @@ const ChartLoading: React.FC<ChartLoadingProps> = ({
   return (
     <div style={{ 
       display: 'flex', 
+      flexDirection: 'column',
       justifyContent: 'center', 
       alignItems: 'center', 
       minHeight: typeof minHeight === 'number' ? `${minHeight}px` : minHeight,
@@ -28,8 +29,12 @@ const ChartLoading: React.FC<ChartLoadingProps> = ({
       <Spin 
         size="large" 
         indicator={<LoadingOutlined style={{ fontSize: 24 }} spin />}
-        tip={tip}
       />
+      {tip && (
+        <div style={{ marginTop: 12, color: 'rgba(0, 0, 0, 0.45)', fontSize: 14 }}>
+          {tip}
+        </div>
+      )}
     </div>
   );
 };

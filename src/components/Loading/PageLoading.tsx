@@ -31,11 +31,17 @@ const PageLoading: React.FC<PageLoadingProps> = ({
 
   return (
     <div style={defaultStyle}>
-      <Spin 
-        size="large"
-        indicator={<LoadingOutlined style={{ fontSize: 32 }} spin />} 
-        tip={tip}
-      />
+      <div style={{ textAlign: 'center' }}>
+        <Spin 
+          size="large"
+          indicator={<LoadingOutlined style={{ fontSize: 32 }} spin />}
+        />
+        {tip && (
+          <div style={{ marginTop: 16, color: 'rgba(0, 0, 0, 0.45)' }}>
+            {tip}
+          </div>
+        )}
+      </div>
     </div>
   );
 };

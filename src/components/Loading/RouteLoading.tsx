@@ -13,8 +13,7 @@ const RouteLoading: React.FC = () => {
       <div className="route-loading-content">
         <Spin 
           size="large"
-          indicator={<LoadingOutlined className="route-loading-icon" spin />} 
-          tip="正在加载页面..."
+          indicator={<LoadingOutlined className="route-loading-icon" spin />}
         />
         <div className="route-loading-text">
           请稍候，正在为您加载内容
