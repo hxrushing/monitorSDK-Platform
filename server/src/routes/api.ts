@@ -105,9 +105,168 @@ export function createApiRouter(db: Connection, summaryService?: SummaryService)
         await trackingService.trackEvent(eventData);
         res.status(200).json({ success: true });
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error tracking event:', error);
-      res.status(500).json({ success: false, error: 'Internal Server Error' });
+      console.error('Error stack:', error?.stack);
+      
+      // 提供更详细的错误信息
+      const errorMessage = error?.message || 'Internal Server Error';
+      const errorCode = error?.code || error?.errno;
+      
+      // 数据库相关错误
+      if (errorCode === 'ER_NO_SUCH_TABLE' || errorCode === 1146) {
+        return res.status(500).json({ 
+          success: false, 
+          error: '数据库表不存在，请先执行初始化脚本',
+          code: errorCode 
+        });
+      }
+      
+      if (errorCode === 'ER_ACCESS_DENIED_ERROR' || errorCode === 1045) {
+        return res.status(500).json({ 
+          success: false, 
+          error: '数据库访问被拒绝，请检查数据库配置',
+          code: errorCode 
+        });
+      }
+      
+      res.status(500).json({ 
+        success: false, 
+        error: errorMessage,
+        code: errorCode 
+      });
+    }
+  });
+
+  // Server-Sent Events 进度推送（必须在 authMiddleware 之前，因为 EventSource 不支持自定义 headers）
+  router.get('/ai-summary/progress/:taskId/stream', async (req, res) => {
+    const { taskId } = req.params;
+    console.log(`[SSE] 收到连接请求，taskId: ${taskId}`);
+    console.log(`[SSE] Query 参数:`, Object.keys(req.query));
+    
+    // 先设置 SSE 响应头（必须在验证之前设置，否则 EventSource 会直接关闭）
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no'); // 禁用 Nginx 缓冲
+    res.setHeader('Access-Control-Allow-Origin', '*'); // 允许跨域（开发环境）
+    
+    // 发送错误信息的辅助函数
+    const sendError = (error: string) => {
+      const errorData = JSON.stringify({ success: false, error });
+      res.write(`event: error\ndata: ${errorData}\n\n`);
+      res.end();
+    };
+    
+    try {
+      // EventSource 不支持自定义 headers，所以从 query 参数获取 token
+      const token = req.query.token as string;
+      if (!token) {
+        console.log('[SSE] 未提供 token');
+        console.log('[SSE] 所有 query 参数:', Object.keys(req.query));
+        sendError('Unauthorized: No token provided');
+        return;
+      }
+
+      console.log(`[SSE] Token 长度: ${token.length}, 前10个字符: ${token.substring(0, 10)}...`);
+
+      // 验证 token
+      let userId: string;
+      try {
+        const payload = jwt.verify(token, JWT_SECRET) as { sub: string; username: string; role: string };
+        userId = payload.sub;
+        (req as any).user = payload;
+        console.log(`[SSE] Token 验证成功，userId: ${userId}`);
+      } catch (e: any) {
+        console.log('[SSE] Token 验证失败:', e?.message || e);
+        console.log('[SSE] Token 验证失败详情:', {
+          name: e?.name,
+          message: e?.message,
+          expiredAt: e?.expiredAt
+        });
+        sendError(`Invalid token: ${e?.message || 'Token verification failed'}`);
+        return;
+      }
+
+      if (!userId) {
+        console.log('[SSE] 未获取到 userId');
+        sendError('Unauthorized: No userId');
+        return;
+      }
+
+      // 验证任务是否存在且属于当前用户
+      if (!summaryService) {
+        console.log('[SSE] SummaryService 未初始化');
+        sendError('Service not available');
+        return;
+      }
+
+      const existingProgress = summaryService.getTaskProgress(taskId);
+      if (!existingProgress) {
+        console.log(`[SSE] 任务不存在: ${taskId}`);
+        sendError('任务不存在或已过期');
+        return;
+      }
+
+      if (existingProgress.userId !== userId) {
+        console.log(`[SSE] 权限不足: userId=${userId}, taskUserId=${existingProgress.userId}`);
+        sendError('无权访问此任务');
+        return;
+      }
+
+      console.log(`[SSE] 开始建立连接，当前进度: ${existingProgress.status} ${existingProgress.progress}%`);
+
+      // 立即发送当前进度
+      const initialData = JSON.stringify({ success: true, data: existingProgress });
+      res.write(`data: ${initialData}\n\n`);
+      console.log(`[SSE] 已发送初始进度: ${initialData.substring(0, 100)}...`);
+
+      // 添加进度监听器
+      const removeListener = summaryService.addProgressListener(taskId, (progress) => {
+        try {
+          const progressData = JSON.stringify({ success: true, data: progress });
+          res.write(`data: ${progressData}\n\n`);
+          console.log(`[SSE] 推送进度更新: ${progress.status} ${progress.progress}% - ${progress.currentStep}`);
+          
+          // 如果任务完成或失败，关闭连接
+          if (progress.status === 'completed' || progress.status === 'failed') {
+            console.log(`[SSE] 任务${progress.status}，准备关闭连接`);
+            res.write(`event: close\ndata: ${progressData}\n\n`);
+            res.end();
+            removeListener();
+            console.log(`[SSE] 连接已关闭`);
+          }
+        } catch (error) {
+          console.error('[SSE] 发送数据失败:', error);
+          res.end();
+          removeListener();
+        }
+      });
+
+      // 定期发送心跳（保持连接）
+      const heartbeatInterval = setInterval(() => {
+        try {
+          res.write(': heartbeat\n\n');
+        } catch (error) {
+          clearInterval(heartbeatInterval);
+          removeListener();
+        }
+      }, 30000); // 每 30 秒发送一次心跳
+
+      // 客户端断开连接时清理
+      req.on('close', () => {
+        clearInterval(heartbeatInterval);
+        removeListener();
+        res.end();
+      });
+
+    } catch (error: any) {
+      console.error('SSE 连接失败:', error);
+      if (!res.headersSent) {
+        res.status(500).json({ success: false, error: 'Internal Server Error' });
+      } else {
+        res.end();
+      }
     }
   });
 
@@ -426,18 +585,61 @@ export function createApiRouter(db: Connection, summaryService?: SummaryService)
           return res.status(400).json({ success: false, error: '请先配置总结设置' });
         }
 
-        console.log('开始生成并发送总结...');
-        const success = await summaryService.generateAndSendSummary(setting);
-        if (success) {
-          res.json({ success: true, message: '总结已发送，请查看您的邮箱' });
-        } else {
-          res.status(500).json({ success: false, error: '发送失败，请检查邮件配置和日志' });
-        }
+        // 生成任务 ID
+        const taskId = uuidv4();
+        
+        // 在返回 taskId 之前，先初始化进度为 0%，确保前端连接 SSE 时能立即看到 0%
+        summaryService.initializeTaskProgress(taskId, userId);
+        
+        // 异步执行，立即返回 taskId
+        summaryService.generateAndSendSummary(setting, taskId).catch((error) => {
+          console.error('异步生成总结失败:', error);
+        });
+
+        res.json({ 
+          success: true, 
+          taskId,
+          message: '总结生成任务已启动，请查询进度' 
+        });
       } catch (error: any) {
         console.error('手动发送总结失败:', error);
         console.error('错误堆栈:', error?.stack);
         const errorMessage = error?.message || 'Internal Server Error';
         res.status(500).json({ success: false, error: errorMessage });
+      }
+    });
+
+    // 查询总结生成进度（保留用于兼容性）
+    router.get('/ai-summary/progress/:taskId', authMiddleware, async (req, res) => {
+      try {
+        const userId = (req as any).user?.sub;
+        const { taskId } = req.params;
+
+        if (!userId) {
+          return res.status(401).json({ success: false, error: 'Unauthorized' });
+        }
+
+        const progress = summaryService.getTaskProgress(taskId);
+        
+        if (!progress) {
+          return res.status(404).json({ 
+            success: false, 
+            error: '任务不存在或已过期' 
+          });
+        }
+
+        // 验证任务属于当前用户
+        if (progress.userId !== userId) {
+          return res.status(403).json({ 
+            success: false, 
+            error: '无权访问此任务' 
+          });
+        }
+
+        res.json({ success: true, data: progress });
+      } catch (error: any) {
+        console.error('查询进度失败:', error);
+        res.status(500).json({ success: false, error: 'Internal Server Error' });
       }
     });
   }

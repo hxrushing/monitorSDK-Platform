@@ -223,6 +223,11 @@ export const apiService = {
     return data;
   },
 
+  async getSummaryProgress(taskId: string) {
+    const data = await api.get(`/ai-summary/progress/${taskId}`);
+    return data;
+  },
+
   // 时序预测相关API
   async checkPredictionHealth() {
     const data = await api.get('/prediction/health');

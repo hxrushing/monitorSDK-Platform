@@ -39,7 +39,19 @@ async function main() {
     schedulerService.start();
 
     // 中间件配置
-    app.use(cors());
+    // 配置 CORS，允许所有必要的 HTTP 方法和请求头
+    app.use(cors({
+      origin: true, // 允许所有来源（生产环境应该指定具体域名）
+      credentials: true,
+      methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+      allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+      exposedHeaders: ['Content-Type'],
+      maxAge: 86400 // 预检请求缓存时间（24小时）
+    }));
+    
+    // 处理 OPTIONS 预检请求
+    app.options('*', cors());
+    
     app.use(express.json());
     app.use(express.urlencoded({ extended: true }));
 

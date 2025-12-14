@@ -213,7 +213,7 @@ export class AIService {
     let currentBatchTokens = 0;
 
     const model = process.env.OPENAI_MODEL || 'gpt-3.5-turbo';
-    
+
     for (const project of data) {
       const projectPrompt = this.buildPrompt([project]);
       const projectTokens = this.estimateTokens(projectPrompt, model);
@@ -453,7 +453,9 @@ export class AIService {
         prompt += `项目：${project.projectName}\n`;
       }
       prompt += `日期：${project.date}\n`;
-      prompt += `核心指标：PV=${project.stats.pv}, UV=${project.stats.uv}, 人均页面=${project.stats.avgPages.toFixed(1)}, 停留=${project.stats.avgDuration.toFixed(1)}分钟\n`;
+      const avgPages = typeof project.stats.avgPages === 'number' ? project.stats.avgPages : 0;
+      const avgDuration = typeof project.stats.avgDuration === 'number' ? project.stats.avgDuration : 0;
+      prompt += `核心指标：PV=${project.stats.pv}, UV=${project.stats.uv}, 人均页面=${avgPages.toFixed(1)}, 停留=${avgDuration.toFixed(1)}分钟\n`;
       
       if (project.trends) {
         const pvChangeStr = project.trends.pvChange > 0 ? '+' : '';
@@ -484,8 +486,10 @@ export class AIService {
       summary += `<ul>\n`;
       summary += `<li>页面访问量(PV)：${project.stats.pv}</li>\n`;
       summary += `<li>独立访客数(UV)：${project.stats.uv}</li>\n`;
-      summary += `<li>人均访问页面数：${project.stats.avgPages}</li>\n`;
-      summary += `<li>平均停留时间：${project.stats.avgDuration}分钟</li>\n`;
+      const avgPages = typeof project.stats.avgPages === 'number' ? project.stats.avgPages : 0;
+      const avgDuration = typeof project.stats.avgDuration === 'number' ? project.stats.avgDuration : 0;
+      summary += `<li>人均访问页面数：${avgPages}</li>\n`;
+      summary += `<li>平均停留时间：${avgDuration}分钟</li>\n`;
       summary += `</ul>\n`;
       
       if (project.trends) {

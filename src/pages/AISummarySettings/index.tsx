@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   Card,
   Form,
@@ -12,11 +12,12 @@ import {
   Typography,
   Alert,
   Divider,
+  Progress,
+  Spin,
 } from 'antd';
-import { ClockCircleOutlined, MailOutlined, CheckCircleOutlined } from '@ant-design/icons';
-import dayjs, { Dayjs } from 'dayjs';
+import { MailOutlined, CheckCircleOutlined, LoadingOutlined } from '@ant-design/icons';
+import dayjs from 'dayjs';
 import { apiService } from '@/services/api';
-import useGlobalStore from '@/store/globalStore';
 import type { Project } from '@/services/api';
 
 const { Title, Text } = Typography;
@@ -32,6 +33,19 @@ interface SummarySetting {
   updatedAt: string;
 }
 
+interface SummaryProgress {
+  taskId: string;
+  userId: string;
+  status: 'pending' | 'collecting' | 'generating' | 'sending' | 'completed' | 'failed';
+  progress: number;
+  currentStep: string;
+  totalProjects: number;
+  processedProjects: number;
+  error?: string;
+  startedAt: number;
+  updatedAt: number;
+}
+
 const AISummarySettings: React.FC = () => {
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
@@ -39,8 +53,8 @@ const AISummarySettings: React.FC = () => {
   const [sending, setSending] = useState(false);
   const [setting, setSetting] = useState<SummarySetting | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
-
-  const selectedProjectId = useGlobalStore(state => state.selectedProjectId);
+  const [progress, setProgress] = useState<SummaryProgress | null>(null);
+  const eventSourceRef = useRef<EventSource | null>(null);
 
   // 加载设置和项目列表
   useEffect(() => {
@@ -107,33 +121,209 @@ const AISummarySettings: React.FC = () => {
     }
   };
 
+  // 清理 SSE 连接
+  useEffect(() => {
+    return () => {
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+        eventSourceRef.current = null;
+      }
+    };
+  }, []);
+
+  // 使用 Server-Sent Events 监听进度
+  const connectProgressStream = (taskId: string) => {
+    // 关闭之前的连接
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close();
+      eventSourceRef.current = null;
+    }
+
+    // 获取 token
+    const token = localStorage.getItem('token');
+    if (!token) {
+      message.error('未登录，请先登录');
+      setSending(false);
+      return;
+    }
+
+    // 构建 SSE URL（EventSource 不支持自定义 headers，所以通过 URL 参数传递 token）
+    // 获取 API base URL（从 http 工具或环境变量）
+    const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api';
+    
+    // 构建完整的 URL
+    // 如果 apiBaseUrl 已经包含 /api，直接使用；否则添加 /api
+    let baseUrl = apiBaseUrl;
+    if (!baseUrl.endsWith('/api')) {
+      // 移除末尾的斜杠（如果有）
+      baseUrl = baseUrl.replace(/\/$/, '');
+      baseUrl = baseUrl + '/api';
+    }
+    
+    const url = `${baseUrl}/ai-summary/progress/${taskId}/stream?token=${encodeURIComponent(token)}`;
+    
+    console.log('[SSE] 连接 URL:', url.replace(/token=[^&]+/, 'token=***')); // 隐藏 token 日志
+    
+    // 创建 EventSource
+    const eventSource = new EventSource(url);
+
+    // 连接打开
+    eventSource.onopen = () => {
+      console.log('[SSE] 连接已建立');
+    };
+
+    // 接收消息
+    eventSource.onmessage = (event) => {
+      try {
+        console.log('[SSE] 收到消息:', event.data);
+        const data = JSON.parse(event.data);
+        if (data.success && data.data) {
+          setProgress(data.data);
+          console.log('[SSE] 进度更新:', data.data.status, data.data.progress + '%');
+
+          // 如果任务完成或失败，关闭连接
+          if (data.data.status === 'completed' || data.data.status === 'failed') {
+            console.log('[SSE] 任务完成，关闭连接');
+            eventSource.close();
+            eventSourceRef.current = null;
+            setSending(false);
+
+            if (data.data.status === 'completed') {
+              message.success('总结已发送，请查看您的邮箱');
+            } else {
+              message.error(data.data.error || '生成总结失败');
+            }
+          }
+        }
+      } catch (error) {
+        console.error('[SSE] 解析进度数据失败:', error, event.data);
+      }
+    };
+
+    // 监听服务器发送的错误事件（自定义事件）
+    eventSource.addEventListener('error', (event: MessageEvent) => {
+      console.error('[SSE] 收到服务器错误事件:', event);
+      try {
+        const data = event.data ? JSON.parse(event.data) : null;
+        if (data && data.error) {
+          console.error('[SSE] 服务器错误:', data.error);
+          message.error(`连接失败: ${data.error}`);
+          eventSource.close();
+          eventSourceRef.current = null;
+          setSending(false);
+        }
+      } catch (error) {
+        console.error('[SSE] 解析错误事件数据失败:', error);
+      }
+    });
+
+    // 监听关闭事件
+    eventSource.addEventListener('close', (event: MessageEvent) => {
+      console.log('[SSE] 收到关闭事件:', event);
+      try {
+        const data = event.data ? JSON.parse(event.data) : null;
+        if (data && data.data) {
+          setProgress(data.data);
+        }
+      } catch (error) {
+        console.error('[SSE] 解析关闭事件数据失败:', error);
+      }
+      eventSource.close();
+      eventSourceRef.current = null;
+      setSending(false);
+    });
+
+    // 连接错误（网络错误或连接失败）
+    eventSource.onerror = (error) => {
+      console.error('[SSE] 连接错误:', error);
+      console.error('[SSE] EventSource readyState:', eventSource.readyState);
+      console.error('[SSE] EventSource URL:', eventSource.url);
+      
+      // readyState: 0 = CONNECTING, 1 = OPEN, 2 = CLOSED
+      if (eventSource.readyState === EventSource.CLOSED) {
+        // 连接已关闭，可能是服务器关闭或网络错误
+        console.log('[SSE] 连接已关闭，readyState:', eventSource.readyState);
+        eventSource.close();
+        eventSourceRef.current = null;
+        
+        // 如果任务还在进行中，降级到轮询
+        if (progress && progress.status !== 'completed' && progress.status !== 'failed') {
+          console.log('[SSE] 连接关闭，降级到轮询模式');
+          message.warning('实时连接中断，切换到轮询模式');
+          fallbackToPolling(taskId);
+        } else {
+          setSending(false);
+        }
+      } else if (eventSource.readyState === EventSource.CONNECTING) {
+        // 仍在连接中，可能是网络问题
+        console.log('[SSE] 仍在连接中...');
+      }
+    };
+
+    eventSourceRef.current = eventSource;
+  };
+
+  // 降级到轮询（当 SSE 不可用时）
+  const fallbackToPolling = async (taskId: string) => {
+    const pollInterval = setInterval(async () => {
+      try {
+        const result = await apiService.getSummaryProgress(taskId) as any;
+        if (result?.success && result?.data) {
+          setProgress(result.data);
+
+          if (result.data.status === 'completed' || result.data.status === 'failed') {
+            clearInterval(pollInterval);
+            setSending(false);
+
+            if (result.data.status === 'completed') {
+              message.success('总结已发送，请查看您的邮箱');
+            } else {
+              message.error(result.data.error || '生成总结失败');
+            }
+          }
+        } else {
+          clearInterval(pollInterval);
+          setSending(false);
+          setProgress(null);
+        }
+      } catch (error) {
+        console.error('轮询进度失败:', error);
+      }
+    }, 2000);
+
+    // 组件卸载时清理
+    return () => clearInterval(pollInterval);
+  };
+
   const handleSendNow = async () => {
     try {
       if (!setting) {
         message.warning('请先保存设置');
         return;
       }
-
-      // 提示用户该操作可能需要较长时间
-      message.info('正在生成并发送总结，数据量较大时可能需要1-2分钟，请耐心等待...', 5);
       
       setSending(true);
-      const result = await apiService.sendAISummaryNow();
-      if (result.success) {
-        message.success('总结已发送，请查看您的邮箱');
+      setProgress(null);
+      
+      const result = await apiService.sendAISummaryNow() as any;
+      if (result?.success && result?.taskId) {
+        // 连接 SSE 进度流
+        connectProgressStream(result.taskId);
+        message.info('总结生成任务已启动，正在处理...', 3);
       } else {
-        message.error(result.error || '发送失败');
+        message.error(result?.error || '启动任务失败');
+        setSending(false);
       }
     } catch (error: any) {
       console.error('发送总结失败:', error);
-      // 如果是超时错误，给出更友好的提示
+      setSending(false);
+      setProgress(null);
+      
       if (error?.code === 'ECONNABORTED' || error?.message?.includes('timeout')) {
-        message.error('处理超时，数据量较大。请稍后重试，或减少项目数量后重试');
+        message.error('请求超时，请稍后重试');
       } else {
         message.error(error?.response?.data?.error || '发送失败，请检查邮件配置');
       }
-    } finally {
-      setSending(false);
     }
   };
 
@@ -224,12 +414,96 @@ const AISummarySettings: React.FC = () => {
               onClick={handleSendNow}
               loading={sending}
               icon={<MailOutlined />}
+              disabled={sending}
             >
               立即发送测试
             </Button>
           </Space>
         </Form>
       </Card>
+
+      {/* 进度显示 */}
+      {progress && (
+        <Card
+          title="生成进度"
+          style={{ marginTop: '24px' }}
+          extra={
+            progress.status === 'completed' ? (
+              <CheckCircleOutlined style={{ color: '#52c41a', fontSize: '20px' }} />
+            ) : progress.status === 'failed' ? (
+              <span style={{ color: '#ff4d4f' }}>失败</span>
+            ) : (
+              <Spin indicator={<LoadingOutlined style={{ fontSize: 20 }} spin />} />
+            )
+          }
+        >
+          <Space direction="vertical" style={{ width: '100%' }} size="large">
+            <div>
+              <Progress
+                percent={progress.progress}
+                status={
+                  progress.status === 'failed' 
+                    ? 'exception' 
+                    : progress.status === 'completed' 
+                    ? 'success' 
+                    : 'active'
+                }
+                strokeColor={
+                  progress.status === 'completed'
+                    ? '#52c41a'
+                    : progress.status === 'failed'
+                    ? '#ff4d4f'
+                    : '#1890ff'
+                }
+              />
+            </div>
+            
+            <div>
+              <Text strong>当前状态：</Text>
+              <Text>
+                {progress.status === 'pending' && '准备中'}
+                {progress.status === 'collecting' && '收集数据'}
+                {progress.status === 'generating' && '生成总结'}
+                {progress.status === 'sending' && '发送邮件'}
+                {progress.status === 'completed' && '已完成'}
+                {progress.status === 'failed' && '失败'}
+              </Text>
+            </div>
+
+            <div>
+              <Text strong>当前步骤：</Text>
+              <Text>{progress.currentStep}</Text>
+            </div>
+
+            {progress.totalProjects > 0 && (
+              <div>
+                <Text strong>项目进度：</Text>
+                <Text>
+                  {progress.processedProjects} / {progress.totalProjects} 个项目
+                </Text>
+              </div>
+            )}
+
+            {progress.error && (
+              <Alert
+                message="错误信息"
+                description={progress.error}
+                type="error"
+                showIcon
+              />
+            )}
+
+            {progress.status === 'completed' && (
+              <Alert
+                message="总结已成功发送"
+                description="请查看您的邮箱，总结报告已发送完成。"
+                type="success"
+                showIcon
+              />
+            )}
+          </Space>
+        </Card>
+      )}
 
       {setting && (
         <Card

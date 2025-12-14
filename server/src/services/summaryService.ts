@@ -5,6 +5,20 @@ import { AIService, SummaryData } from './aiService';
 import { EmailService } from './emailService';
 import { v4 as uuidv4 } from 'uuid';
 
+// 任务进度状态
+export interface SummaryTaskProgress {
+  taskId: string;
+  userId: string;
+  status: 'pending' | 'collecting' | 'generating' | 'sending' | 'completed' | 'failed';
+  progress: number; // 0-100
+  currentStep: string;
+  totalProjects: number;
+  processedProjects: number;
+  error?: string;
+  startedAt: number;
+  updatedAt: number;
+}
+
 export interface SummarySetting {
   id: string;
   userId: string;
@@ -23,13 +37,106 @@ export interface SummarySettingInput {
   projectIds?: string[];
 }
 
+// SSE 监听器类型
+type ProgressListener = (progress: SummaryTaskProgress) => void;
+
 export class SummaryService {
+  // 任务进度存储（内存存储，生产环境建议使用 Redis）
+  private taskProgress: Map<string, SummaryTaskProgress> = new Map();
+  // SSE 监听器存储（taskId -> listeners[]）
+  private progressListeners: Map<string, Set<ProgressListener>> = new Map();
+
   constructor(
     private db: Connection,
     private statsService: StatsService,
     private aiService: AIService,
     private emailService: EmailService
-  ) {}
+  ) {
+    // 定期清理过期的任务进度（1小时后）
+    setInterval(() => {
+      const now = Date.now();
+      for (const [taskId, progress] of this.taskProgress.entries()) {
+        if (now - progress.updatedAt > 3600000) { // 1小时
+          this.taskProgress.delete(taskId);
+          this.progressListeners.delete(taskId);
+        }
+      }
+    }, 60000); // 每分钟检查一次
+  }
+
+  // 添加进度监听器
+  addProgressListener(taskId: string, listener: ProgressListener): () => void {
+    if (!this.progressListeners.has(taskId)) {
+      this.progressListeners.set(taskId, new Set());
+    }
+    this.progressListeners.get(taskId)!.add(listener);
+
+    // 返回清理函数
+    return () => {
+      const listeners = this.progressListeners.get(taskId);
+      if (listeners) {
+        listeners.delete(listener);
+        if (listeners.size === 0) {
+          this.progressListeners.delete(taskId);
+        }
+      }
+    };
+  }
+
+  // 获取任务进度
+  getTaskProgress(taskId: string): SummaryTaskProgress | null {
+    return this.taskProgress.get(taskId) || null;
+  }
+
+  // 初始化任务进度（公开方法，用于在任务开始前初始化）
+  initializeTaskProgress(taskId: string, userId: string): void {
+    this.updateProgress(taskId, userId, 'pending', 0, '准备开始...', 0, 0);
+  }
+
+  // 更新任务进度
+  private updateProgress(
+    taskId: string,
+    userId: string,
+    status: SummaryTaskProgress['status'],
+    progress: number,
+    currentStep: string,
+    totalProjects?: number,
+    processedProjects?: number,
+    error?: string
+  ): void {
+    const existing = this.taskProgress.get(taskId);
+    const now = Date.now();
+    
+    // 保留到小数点后一位，并确保在 0-100 范围内
+    const roundedProgress = Math.round(Math.min(100, Math.max(0, progress)) * 10) / 10;
+    
+    const progressData: SummaryTaskProgress = {
+      taskId,
+      userId,
+      status,
+      progress: roundedProgress,
+      currentStep,
+      totalProjects: totalProjects ?? existing?.totalProjects ?? 0,
+      processedProjects: processedProjects ?? existing?.processedProjects ?? 0,
+      error,
+      startedAt: existing?.startedAt ?? now,
+      updatedAt: now,
+    };
+
+    this.taskProgress.set(taskId, progressData);
+
+    // 通知所有监听器
+    const listeners = this.progressListeners.get(taskId);
+    if (listeners) {
+      listeners.forEach(listener => {
+        try {
+          listener(progressData);
+        } catch (error) {
+          console.error('通知进度监听器失败:', error);
+        }
+      });
+    }
+  }
 
   // 获取用户的总结设置
   async getUserSetting(userId: string): Promise<SummarySetting | null> {
@@ -215,10 +322,22 @@ export class SummaryService {
     }
   }
 
-  // 生成并发送总结
-  async generateAndSendSummary(setting: SummarySetting): Promise<boolean> {
+  // 生成并发送总结（支持进度跟踪）
+  async generateAndSendSummary(setting: SummarySetting, taskId?: string): Promise<boolean> {
+    const currentTaskId = taskId || uuidv4();
+    const userId = setting.userId;
+    const startTime = Date.now();
+    
     try {
-      console.log('开始生成并发送总结:', { userId: setting.userId, email: setting.email });
+      // 如果进度还没有初始化（可能已经在返回 taskId 前初始化了），则初始化
+      const existingProgress = this.taskProgress.get(currentTaskId);
+      if (!existingProgress) {
+        this.updateProgress(currentTaskId, userId, 'pending', 0, '准备开始...');
+      }
+      
+      console.log('开始生成并发送总结:', { userId: setting.userId, email: setting.email, taskId: currentTaskId });
+      
+      this.updateProgress(currentTaskId, userId, 'collecting', 2, '获取用户邮箱...');
       
       // 获取用户邮箱（优先使用设置中的邮箱，否则使用注册邮箱）
       let email = setting.email;
@@ -234,8 +353,11 @@ export class SummaryService {
 
       if (!email) {
         console.error(`用户 ${setting.userId} 没有配置邮箱`);
+        this.updateProgress(currentTaskId, userId, 'failed', 0, '获取邮箱失败', 0, 0, '用户没有配置邮箱');
         return false;
       }
+
+      this.updateProgress(currentTaskId, userId, 'collecting', 5, '获取项目列表...');
 
       // 获取项目列表
       let projectIds: string[] = [];
@@ -250,12 +372,13 @@ export class SummaryService {
         const [projectRows] = await this.db.execute<RowDataPacket[]>(
           'SELECT id FROM projects ORDER BY created_at DESC'
         );
-        projectIds = projectRows.map((row) => row.id);
+        projectIds = (projectRows as RowDataPacket[]).map((row: RowDataPacket) => row.id as string);
         console.log('获取到的所有项目:', projectIds);
       }
 
       if (projectIds.length === 0) {
         console.log(`用户 ${setting.userId} 没有项目数据`);
+        this.updateProgress(currentTaskId, userId, 'failed', 0, '没有项目数据', 0, 0, '用户没有项目数据');
         return false;
       }
 
@@ -264,6 +387,15 @@ export class SummaryService {
         console.warn(`项目数量过多（${projectIds.length}），将只处理前 ${MAX_PROJECTS} 个项目`);
         projectIds = projectIds.slice(0, MAX_PROJECTS);
       }
+
+      const totalProjects = projectIds.length;
+      // 数据收集阶段：10% - 60%（共 50%）
+      const collectStartProgress = 10;
+      const collectEndProgress = 60;
+      const collectProgressRange = collectEndProgress - collectStartProgress;
+      const collectProgressStep = collectProgressRange / totalProjects;
+      
+      this.updateProgress(currentTaskId, userId, 'collecting', collectStartProgress, `开始收集 ${totalProjects} 个项目的数据...`, totalProjects, 0);
 
       // 获取昨天的日期
       const yesterday = new Date();
@@ -278,8 +410,21 @@ export class SummaryService {
       // 收集所有项目的数据
       const summaryData: SummaryData[] = [];
 
-      for (const projectId of projectIds) {
+      for (let i = 0; i < projectIds.length; i++) {
+        const projectId = projectIds[i];
         try {
+          // 线性计算每个项目的进度
+          const currentProgress = collectStartProgress + (i + 1) * collectProgressStep;
+          this.updateProgress(
+            currentTaskId,
+            userId,
+            'collecting',
+            Math.min(collectEndProgress, currentProgress),
+            `正在收集项目 ${i + 1}/${totalProjects} 的数据...`,
+            totalProjects,
+            i + 1
+          );
+
           // 获取项目名称
           const [projectRows] = await this.db.execute<RowDataPacket[]>(
             'SELECT name FROM projects WHERE id = ?',
@@ -329,6 +474,15 @@ export class SummaryService {
             [projectId, dateStr]
           );
 
+          // 确保 overview 存在，并且数值类型正确
+          const safeOverview = overview || { avgPages: 0, avgDuration: 0 };
+          const avgPages = typeof safeOverview.avgPages === 'number' && !isNaN(safeOverview.avgPages) 
+            ? safeOverview.avgPages 
+            : (typeof safeOverview.avgPages === 'string' ? parseFloat(safeOverview.avgPages) || 0 : 0);
+          const avgDuration = typeof safeOverview.avgDuration === 'number' && !isNaN(safeOverview.avgDuration)
+            ? safeOverview.avgDuration
+            : (typeof safeOverview.avgDuration === 'string' ? parseFloat(safeOverview.avgDuration) || 0 : 0);
+
           summaryData.push({
             projectId,
             projectName,
@@ -336,11 +490,11 @@ export class SummaryService {
             stats: {
               pv: Number(todayStats.pv) || 0,
               uv: Number(todayStats.uv) || 0,
-              avgPages: overview.avgPages || 0,
-              avgDuration: overview.avgDuration || 0,
+              avgPages,
+              avgDuration,
             },
-            topEvents: eventRows.map((row) => ({
-              eventName: row.eventName,
+            topEvents: (eventRows as RowDataPacket[]).map((row: RowDataPacket) => ({
+              eventName: row.eventName as string,
               count: Number(row.count),
               users: Number(row.users),
             })),
@@ -356,6 +510,7 @@ export class SummaryService {
 
       if (summaryData.length === 0) {
         console.log(`用户 ${setting.userId} 没有可用的数据`);
+        this.updateProgress(currentTaskId, userId, 'failed', 0, '没有可用数据', totalProjects, totalProjects, '没有可用的数据');
         return false;
       }
 
@@ -365,14 +520,77 @@ export class SummaryService {
       const totalEvents = summaryData.reduce((sum, p) => sum + p.topEvents.length, 0);
       console.log(`数据统计：${summaryData.length} 个项目，${totalEvents} 个事件记录`);
 
-      // 使用AI生成总结（Markdown）
-      const startTime = Date.now();
-      const summary = await this.aiService.generateSummary(summaryData);
-      const duration = Date.now() - startTime;
-      console.log(`总结生成完成，长度: ${summary.length} 字符，耗时: ${duration}ms`);
+      // AI 生成阶段：60% - 85%（共 25%）
+      const generateStartProgress = 50;
+      const generateEndProgress = 85;
+      
+      // 添加平滑过渡：从收集阶段到生成阶段
+      // 获取当前进度，确保平滑过渡
+      const currentProgressData = this.taskProgress.get(currentTaskId);
+      const currentProgress = currentProgressData?.progress ?? collectEndProgress;
+      
+      // 如果当前进度小于 50%，先平滑过渡到 50%
+      if (currentProgress < generateStartProgress) {
+        this.updateProgress(currentTaskId, userId, 'collecting', generateStartProgress, '数据收集完成，准备生成总结...', totalProjects, totalProjects);
+        await new Promise(resolve => setTimeout(resolve, 300));
+      }
+      
+      // 平滑过渡到生成阶段：50% -> 51% -> 52% -> 53%
+      const transitionEndProgress = 53; // 过渡结束时的进度
+      const transitionSteps = [51, 52, transitionEndProgress];
+      for (const step of transitionSteps) {
+        this.updateProgress(currentTaskId, userId, 'generating', step, '正在使用 AI 生成总结...', totalProjects, totalProjects);
+        await new Promise(resolve => setTimeout(resolve, 150));
+      }
+
+      // 使用AI生成总结（Markdown），在生成过程中定期更新进度
+      const generateStartTime = Date.now();
+      const estimatedGenerateTime = 30000; // 预估生成时间 30 秒
+      
+      // 记录过渡结束时的进度，作为定时器的起始进度
+      const timerStartProgress = transitionEndProgress;
+      const timerProgressRange = generateEndProgress - timerStartProgress; // 从 63% 到 85%，共 22%
+      
+      // 创建一个进度更新定时器，在生成过程中线性更新进度
+      const progressInterval = setInterval(() => {
+        const elapsed = Date.now() - generateStartTime;
+        const progressRatio = Math.min(0.9, elapsed / estimatedGenerateTime); // 最多到 90%，等待实际完成
+        // 从 timerStartProgress (63%) 开始，线性增长到 generateEndProgress (85%)
+        const currentProgress = timerStartProgress + progressRatio * timerProgressRange;
+        // 确保进度不会回退，并且不会超过 generateEndProgress - 1
+        const finalProgress = Math.max(timerStartProgress, Math.min(generateEndProgress - 1, currentProgress));
+        this.updateProgress(
+          currentTaskId,
+          userId,
+          'generating',
+          finalProgress,
+          '正在使用 AI 生成总结...',
+          totalProjects,
+          totalProjects
+        );
+      }, 1000); // 每秒更新一次进度
+      
+      let summary: string;
+      try {
+        summary = await this.aiService.generateSummary(summaryData);
+        clearInterval(progressInterval);
+        
+        const duration = Date.now() - generateStartTime;
+        console.log(`总结生成完成，长度: ${summary.length} 字符，耗时: ${duration}ms`);
+        
+        this.updateProgress(currentTaskId, userId, 'generating', generateEndProgress, '总结生成完成，正在准备邮件...', totalProjects, totalProjects);
+      } catch (error) {
+        clearInterval(progressInterval);
+        throw error;
+      }
+      
       // 使用 markdown-it 渲染为 HTML（兼容 CJS）
       const md = new MarkdownIt({ html: false, linkify: true, breaks: false });
       const summaryHtml = md.render(summary || '');
+      
+      // 邮件发送阶段：85% - 100%（共 15%）
+      const sendStartProgress = 85;
+      this.updateProgress(currentTaskId, userId, 'sending', sendStartProgress, '正在发送邮件...', totalProjects, totalProjects);
 
       // 发送邮件
       const html = `
@@ -414,14 +632,29 @@ export class SummaryService {
 
       if (success) {
         console.log('邮件发送成功');
+        this.updateProgress(currentTaskId, userId, 'completed', 100, '总结已成功发送到邮箱', totalProjects, totalProjects);
+        
+        const totalDuration = Date.now() - startTime;
+        console.log(`总结生成和发送完成，总耗时: ${totalDuration}ms`);
       } else {
         console.error('邮件发送失败');
+        this.updateProgress(currentTaskId, userId, 'failed', 90, '邮件发送失败', totalProjects, totalProjects, '邮件发送失败，请检查邮件配置');
       }
       
       return success;
     } catch (error: any) {
       console.error('生成并发送总结失败:', error);
       console.error('错误堆栈:', error?.stack);
+      this.updateProgress(
+        currentTaskId,
+        userId,
+        'failed',
+        0,
+        '处理失败',
+        0,
+        0,
+        error?.message || '未知错误'
+      );
       return false;
     }
   }
