@@ -96,6 +96,9 @@ importers:
       vite:
         specifier: ^4.4.5
         version: 4.5.14(@types/node@18.19.130)(less@4.4.2)
+      vite-plugin-remove-console:
+        specifier: ^2.2.0
+        version: 2.2.0
 
 packages:
 
@@ -2310,6 +2313,9 @@ packages:
   uuid@9.0.1:
     resolution: {integrity: sha512-b+1eJOlsR9K8HJpow9Ok3fiWOWSIcIzXodvv0rQjVoOVNpWMpxf1wZNpt4y9h10odCNrqnYp1OBzRktckBe3sA==}
     hasBin: true
+
+  vite-plugin-remove-console@2.2.0:
+    resolution: {integrity: sha512-qgjh5pz75MdE9Kzs8J0kBwaCfifHV0ezRbB9rpGsIOxam+ilcGV7WOk91vFJXquzRmiKrFh3Hxlh0JJWAmXTbQ==}
 
   vite@4.5.14:
     resolution: {integrity: sha512-+v57oAaoYNnO3hIu5Z/tJRZjq5aHM2zDve9YZ8HngVHbhk66RStobhb1sqPMIPEleV6cNKYK4eGrAbE9Ulbl2g==}
@@ -4991,6 +4997,8 @@ snapshots:
       punycode: 2.3.1
 
   uuid@9.0.1: {}
+
+  vite-plugin-remove-console@2.2.0: {}
 
   vite@4.5.14(@types/node@18.19.130)(less@4.4.2):
     dependencies:

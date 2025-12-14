@@ -41,6 +41,7 @@
     "less": "^4.3.0",
     "sharp": "^0.34.5",
     "typescript": "^5.0.2",
-    "vite": "^4.4.5"
+    "vite": "^4.4.5",
+    "vite-plugin-remove-console": "^2.2.0"
   }
 }

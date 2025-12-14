@@ -1,10 +1,19 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import path from 'path'
+import removeConsole from 'vite-plugin-remove-console'
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react(),
+    // 生产环境移除 console 语句（保留 console.error 和 console.warn，便于错误追踪）
+    // 该插件默认只在生产环境（build 模式）生效，开发环境不受影响
+    removeConsole({
+      includes: ['log', 'info', 'debug', 'trace'],
+      // 不包含 error 和 warn，保留它们用于错误追踪
+    }),
+  ],
   resolve: {
     alias: {
       '@': path.resolve(__dirname, 'src')
@@ -41,8 +50,8 @@ export default defineConfig({
     },
     // 启用代码压缩（使用 esbuild，更快）
     minify: 'esbuild',
-    // 注意：esbuild 不支持 drop_console，如果需要移除 console，可以使用 terser
-    // 但 esbuild 压缩速度更快，通常已经足够
+    // 注意：console 移除已通过 vite-plugin-remove-console 插件处理
+    // 保留 esbuild 压缩以获得更快的构建速度
     // Tree Shaking 默认启用，无需配置
     // 设置 chunk 大小警告阈值
     chunkSizeWarningLimit: 1000,
