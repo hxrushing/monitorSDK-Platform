@@ -1,4 +1,5 @@
 import { Connection, RowDataPacket } from 'mysql2/promise';
+import { cacheManager } from '../utils/cache';
 
 export interface StatsQuery {
   projectId: string;
@@ -77,13 +78,105 @@ interface PerformanceAnalysisRow extends RowDataPacket {
 }
 
 export class StatsService {
+  // 缓存实例
+  private statsCache = cacheManager.getCache<string, StatsData[]>(
+    'stats',
+    500, // 最大500条缓存
+    2 * 60 * 1000 // 2分钟过期（统计数据变化较快）
+  );
+
+  private overviewCache = cacheManager.getCache<string, any>(
+    'overview',
+    200, // 最大200条缓存
+    1 * 60 * 1000 // 1分钟过期（概览数据需要更实时）
+  );
+
+  private eventAnalysisCache = cacheManager.getCache<string, any[]>(
+    'eventAnalysis',
+    300, // 最大300条缓存
+    2 * 60 * 1000 // 2分钟过期
+  );
+
+  private funnelCache = cacheManager.getCache<string, FunnelStageResult[]>(
+    'funnel',
+    200, // 最大200条缓存
+    3 * 60 * 1000 // 3分钟过期（漏斗分析计算复杂，缓存时间稍长）
+  );
+
+  private topProjectsCache = cacheManager.getCache<string, any[]>(
+    'topProjects',
+    100, // 最大100条缓存
+    5 * 60 * 1000 // 5分钟过期（Top项目变化较慢）
+  );
+
+  private performanceCache = cacheManager.getCache<string, any>(
+    'performance',
+    200, // 最大200条缓存
+    3 * 60 * 1000 // 3分钟过期（性能分析计算复杂）
+  );
+
   constructor(private db: Connection) {}
+
+  /**
+   * 生成缓存键
+   */
+  private generateCacheKey(prefix: string, params: Record<string, any>): string {
+    const sortedParams = Object.keys(params)
+      .sort()
+      .map(key => `${key}:${params[key]}`)
+      .join('|');
+    return `${prefix}:${sortedParams}`;
+  }
+
+  /**
+   * 清除项目相关的所有缓存（当有新事件数据时调用）
+   */
+  clearProjectCache(projectId: string): void {
+    // 清除该项目的所有相关缓存
+    // 由于缓存键包含projectId，我们需要遍历所有键来清除
+    const caches = [
+      this.statsCache,
+      this.overviewCache,
+      this.eventAnalysisCache,
+      this.funnelCache,
+      this.topProjectsCache,
+      this.performanceCache,
+    ];
+
+    caches.forEach(cache => {
+      const keysToDelete: string[] = [];
+      for (const key of cache.keys()) {
+        if (key.includes(`projectId:${projectId}`)) {
+          keysToDelete.push(key);
+        }
+      }
+      keysToDelete.forEach(key => cache.delete(key));
+    });
+
+    console.log(`已清除项目 ${projectId} 的所有缓存`);
+  }
 
   // 获取基础统计数据
   async getStats(query: StatsQuery) {
     try {
-      console.log('开始获取基础统计数据:', query);
       const { projectId, startDate, endDate, eventName } = query;
+      
+      // 生成缓存键
+      const cacheKey = this.generateCacheKey('stats', {
+        projectId,
+        startDate,
+        endDate,
+        eventName: eventName || '',
+      });
+
+      // 尝试从缓存获取
+      const cached = this.statsCache.get(cacheKey);
+      if (cached) {
+        console.log(`[缓存命中] 基础统计数据: ${cacheKey}`);
+        return cached;
+      }
+
+      console.log('开始获取基础统计数据:', query);
       const params = [projectId, startDate, endDate];
 
       let sql = `
@@ -108,6 +201,11 @@ export class StatsService {
 
       const [rows] = await this.db.execute<StatsData[]>(sql, params);
       console.log('查询结果:', rows);
+      
+      // 存入缓存
+      this.statsCache.set(cacheKey, rows as StatsData[]);
+      console.log(`[缓存存储] 基础统计数据: ${cacheKey}`);
+      
       return rows;
     } catch (err: any) {
       console.error('获取统计数据失败:', err);
@@ -118,8 +216,22 @@ export class StatsService {
   // 获取今日概览数据
   async getDashboardOverview(projectId: string) {
     try {
-      console.log('开始获取仪表盘概览数据:', projectId);
       const today = new Date().toISOString().split('T')[0];
+      
+      // 生成缓存键（包含日期，确保每天的数据独立缓存）
+      const cacheKey = this.generateCacheKey('overview', {
+        projectId,
+        date: today,
+      });
+
+      // 尝试从缓存获取
+      const cached = this.overviewCache.get(cacheKey);
+      if (cached) {
+        console.log(`[缓存命中] 仪表盘概览数据: ${cacheKey}`);
+        return cached;
+      }
+
+      console.log('开始获取仪表盘概览数据:', projectId);
       
       // 获取今日PV和UV
       const [todayStats] = await this.db.execute(
@@ -168,6 +280,11 @@ export class StatsService {
       };
 
       console.log('仪表盘概览数据:', result);
+      
+      // 存入缓存
+      this.overviewCache.set(cacheKey, result);
+      console.log(`[缓存存储] 仪表盘概览数据: ${cacheKey}`);
+      
       return result;
     } catch (err: any) {
       console.error('获取仪表盘概览数据失败:', err);
@@ -178,7 +295,6 @@ export class StatsService {
   // 获取事件分析数据
   async getEventAnalysis(query: EventAnalysisQuery) {
     try {
-      console.log('开始获取事件分析数据:', query);
       const { projectId, startDate, endDate, events } = query;
       
       if (!projectId || !startDate || !endDate || !events || events.length === 0) {
@@ -189,6 +305,24 @@ export class StatsService {
       if (!this.isValidDate(startDate) || !this.isValidDate(endDate)) {
         throw new Error('Invalid date format. Use YYYY-MM-DD');
       }
+
+      // 生成缓存键（事件列表需要排序以确保一致性）
+      const sortedEvents = [...events].sort().join(',');
+      const cacheKey = this.generateCacheKey('eventAnalysis', {
+        projectId,
+        startDate,
+        endDate,
+        events: sortedEvents,
+      });
+
+      // 尝试从缓存获取
+      const cached = this.eventAnalysisCache.get(cacheKey);
+      if (cached) {
+        console.log(`[缓存命中] 事件分析数据: ${cacheKey}`);
+        return cached;
+      }
+
+      console.log('开始获取事件分析数据:', query);
 
       // 构建SQL查询
       const placeholders = events.map(() => '?').join(',');
@@ -216,13 +350,19 @@ export class StatsService {
       // 确保返回的是数组
       const results = Array.isArray(rows) ? rows : [];
       
-      return results.map(row => ({
+      const mappedResults = results.map(row => ({
         date: row.timestamp,
         eventName: row.eventName,
         count: Number(row.count),
         users: Number(row.users),
         avgPerUser: row.users > 0 ? Number(row.count) / Number(row.users) : 0
       }));
+
+      // 存入缓存
+      this.eventAnalysisCache.set(cacheKey, mappedResults);
+      console.log(`[缓存存储] 事件分析数据: ${cacheKey}`);
+
+      return mappedResults;
     } catch (err: any) {
       console.error('获取事件分析数据失败:', err);
       throw new Error(`Failed to get event analysis: ${err.message}`);
@@ -232,7 +372,6 @@ export class StatsService {
   // 获取漏斗分析数据
   async getFunnelAnalysis(query: FunnelQuery): Promise<FunnelStageResult[]> {
     try {
-      console.log('开始获取漏斗分析数据:', query);
       const { projectId, startDate, endDate, stages } = query;
       
       if (!projectId || !startDate || !endDate || !stages || stages.length === 0) {
@@ -243,6 +382,24 @@ export class StatsService {
       if (!this.isValidDate(startDate) || !this.isValidDate(endDate)) {
         throw new Error('Invalid date format. Use YYYY-MM-DD');
       }
+
+      // 生成缓存键（阶段列表需要排序以确保一致性）
+      const sortedStages = [...stages].sort().join(',');
+      const cacheKey = this.generateCacheKey('funnel', {
+        projectId,
+        startDate,
+        endDate,
+        stages: sortedStages,
+      });
+
+      // 尝试从缓存获取
+      const cached = this.funnelCache.get(cacheKey);
+      if (cached) {
+        console.log(`[缓存命中] 漏斗分析数据: ${cacheKey}`);
+        return cached;
+      }
+
+      console.log('开始获取漏斗分析数据:', query);
 
       // 为每个阶段获取用户数
       const results: FunnelStageResult[] = [];
@@ -305,6 +462,11 @@ export class StatsService {
       }
 
       console.log('漏斗分析结果:', results);
+      
+      // 存入缓存
+      this.funnelCache.set(cacheKey, results);
+      console.log(`[缓存存储] 漏斗分析数据: ${cacheKey}`);
+      
       return results;
     } catch (err: any) {
       console.error('获取漏斗分析数据失败:', err);
@@ -324,6 +486,20 @@ export class StatsService {
   // 获取Top 5访问项目
   async getTopVisitedProjects(projectId: string, startDate: string, endDate: string) {
     try {
+      // 生成缓存键
+      const cacheKey = this.generateCacheKey('topProjects', {
+        projectId,
+        startDate,
+        endDate,
+      });
+
+      // 尝试从缓存获取
+      const cached = this.topProjectsCache.get(cacheKey);
+      if (cached) {
+        console.log(`[缓存命中] Top 5访问项目数据: ${cacheKey}`);
+        return cached;
+      }
+
       console.log('开始获取Top 5访问项目数据:', { projectId, startDate, endDate });
       
       const sql = `
@@ -342,6 +518,11 @@ export class StatsService {
 
       const [rows] = await this.db.execute(sql, [projectId, startDate, endDate]);
       console.log('Top 5访问项目数据:', rows);
+      
+      // 存入缓存
+      this.topProjectsCache.set(cacheKey, rows as any[]);
+      console.log(`[缓存存储] Top 5访问项目数据: ${cacheKey}`);
+      
       return rows;
     } catch (err: any) {
       console.error('获取Top 5访问项目数据失败:', err);
@@ -352,7 +533,6 @@ export class StatsService {
   // 获取性能分析数据
   async getPerformanceAnalysis(query: PerformanceAnalysisQuery) {
     try {
-      console.log('开始获取性能分析数据:', query);
       const { projectId, startDate, endDate, metrics } = query;
       
       if (!projectId || !startDate || !endDate || !metrics || metrics.length === 0) {
@@ -363,6 +543,24 @@ export class StatsService {
       if (!this.isValidDate(startDate) || !this.isValidDate(endDate)) {
         throw new Error('Invalid date format. Use YYYY-MM-DD');
       }
+
+      // 生成缓存键（指标列表需要排序以确保一致性）
+      const sortedMetrics = [...metrics].sort().join(',');
+      const cacheKey = this.generateCacheKey('performance', {
+        projectId,
+        startDate,
+        endDate,
+        metrics: sortedMetrics,
+      });
+
+      // 尝试从缓存获取
+      const cached = this.performanceCache.get(cacheKey);
+      if (cached) {
+        console.log(`[缓存命中] 性能分析数据: ${cacheKey}`);
+        return cached;
+      }
+
+      console.log('开始获取性能分析数据:', query);
 
       // 性能指标阈值
       const thresholds: Record<string, { good: number; needsImprovement: number }> = {
@@ -507,10 +705,16 @@ export class StatsService {
         };
       });
 
-      return {
+      const result = {
         summary,
         details,
       };
+
+      // 存入缓存
+      this.performanceCache.set(cacheKey, result);
+      console.log(`[缓存存储] 性能分析数据: ${cacheKey}`);
+
+      return result;
     } catch (err: any) {
       console.error('获取性能分析数据失败:', err);
       throw new Error(`Failed to get performance analysis: ${err.message}`);

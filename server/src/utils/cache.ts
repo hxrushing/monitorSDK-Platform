@@ -69,7 +69,10 @@ export class LRUCache<K, V> {
     // 如果缓存已满，删除最久未使用的项
     if (this.cache.size >= this.maxSize) {
       const firstKey = this.cache.keys().next().value;
-      this.cache.delete(firstKey);
+      // 由于 Map 可能为空，先判断 firstKey 是否存在
+      if (firstKey !== undefined) {
+        this.cache.delete(firstKey);
+      }
     }
 
     // 添加新项

@@ -7,6 +7,7 @@ import { UserService } from '../services/userService';
 import { SummaryService } from '../services/summaryService';
 import { PredictionService } from '../services/predictionService';
 import { PredictionRecordService } from '../services/predictionRecordService';
+import { cacheManager } from '../utils/cache';
 import { Connection } from 'mysql2/promise';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -890,6 +891,92 @@ export function createApiRouter(db: Connection, summaryService?: SummaryService)
       }
     } catch (error: any) {
       console.error('删除预测记录失败:', error);
+      res.status(500).json({ 
+        success: false, 
+        error: error.message || 'Internal Server Error' 
+      });
+    }
+  });
+
+  // 缓存统计和监控（需要认证，仅管理员可访问）
+  router.get('/cache/stats', authMiddleware, async (req, res) => {
+    try {
+      const user = (req as any).user;
+      
+      // 检查是否是管理员（可选，根据实际需求）
+      // if (user.role !== 'admin') {
+      //   return res.status(403).json({ 
+      //     success: false, 
+      //     error: '无权访问缓存统计' 
+      //   });
+      // }
+
+      const stats = cacheManager.getAllStats();
+      
+      // 计算总体统计
+      let totalSize = 0;
+      let totalMaxSize = 0;
+      let totalAccess = 0;
+      
+      Object.values(stats).forEach((cacheStat: any) => {
+        totalSize += cacheStat.size || 0;
+        totalMaxSize += cacheStat.maxSize || 0;
+        totalAccess += cacheStat.totalAccess || 0;
+      });
+
+      res.json({
+        success: true,
+        data: {
+          caches: stats,
+          summary: {
+            totalCaches: Object.keys(stats).length,
+            totalSize,
+            totalMaxSize,
+            totalAccess,
+            utilizationRate: totalMaxSize > 0 ? (totalSize / totalMaxSize * 100).toFixed(2) + '%' : '0%',
+          }
+        }
+      });
+    } catch (error: any) {
+      console.error('获取缓存统计失败:', error);
+      res.status(500).json({ 
+        success: false, 
+        error: error.message || 'Internal Server Error' 
+      });
+    }
+  });
+
+  // 清除指定缓存（需要认证）
+  router.delete('/cache/:cacheName', authMiddleware, async (req, res) => {
+    try {
+      const { cacheName } = req.params;
+      
+      cacheManager.clear(cacheName);
+      
+      res.json({ 
+        success: true, 
+        message: `缓存 ${cacheName} 已清除` 
+      });
+    } catch (error: any) {
+      console.error('清除缓存失败:', error);
+      res.status(500).json({ 
+        success: false, 
+        error: error.message || 'Internal Server Error' 
+      });
+    }
+  });
+
+  // 清除所有缓存（需要认证）
+  router.delete('/cache', authMiddleware, async (req, res) => {
+    try {
+      cacheManager.clearAll();
+      
+      res.json({ 
+        success: true, 
+        message: '所有缓存已清除' 
+      });
+    } catch (error: any) {
+      console.error('清除所有缓存失败:', error);
       res.status(500).json({ 
         success: false, 
         error: error.message || 'Internal Server Error' 

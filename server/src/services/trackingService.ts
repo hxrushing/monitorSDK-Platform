@@ -1,5 +1,6 @@
 import { Connection } from 'mysql2/promise';
 import { v4 as uuidv4 } from 'uuid';
+import { cacheManager } from '../utils/cache';
 
 interface EventData {
   projectId: string;
@@ -17,6 +18,31 @@ interface EventData {
 
 export class TrackingService {
   constructor(private db: Connection) {}
+
+  /**
+   * 清除项目相关的所有统计缓存
+   * 当有新事件数据插入时调用此方法
+   */
+  private clearStatsCache(projectId: string): void {
+    // 获取所有缓存实例并清除相关键
+    const cacheNames = ['stats', 'overview', 'eventAnalysis', 'funnel', 'topProjects', 'performance'];
+    
+    cacheNames.forEach(cacheName => {
+      const cache = cacheManager.getCache<string, any>(cacheName);
+      const keysToDelete: string[] = [];
+      
+      for (const key of cache.keys()) {
+        if (key.includes(`projectId:${projectId}`)) {
+          keysToDelete.push(key);
+        }
+      }
+      
+      keysToDelete.forEach(key => {
+        cache.delete(key);
+        console.log(`[缓存失效] 已清除 ${cacheName} 缓存: ${key}`);
+      });
+    });
+  }
 
   // 批量处理事件
   async trackBatchEvents(batchData: {
@@ -74,6 +100,11 @@ export class TrackingService {
         await this.db.commit();
         console.log(`批量事件处理完成，成功: ${processedCount}, 失败: ${failedEvents.length}`);
 
+        // 如果有成功插入的事件，清除该项目的统计缓存
+        if (processedCount > 0) {
+          this.clearStatsCache(batchData.projectId);
+        }
+
         return {
           success: true,
           processedCount,
@@ -129,6 +160,9 @@ export class TrackingService {
         'INSERT INTO events (project_id, event_name, event_params, user_id, device_info, timestamp) VALUES (?, ?, ?, ?, ?, ?)',
         params
       );
+
+      // 清除该项目的统计缓存
+      this.clearStatsCache(eventData.projectId);
 
       console.log('事件追踪完成');
     } catch (err: any) {

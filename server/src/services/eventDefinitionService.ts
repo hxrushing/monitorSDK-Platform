@@ -1,5 +1,6 @@
 import { Connection } from 'mysql2/promise';
 import { v4 as uuidv4 } from 'uuid';
+import { cacheManager } from '../utils/cache';
 
 export interface EventDefinition {
   id?: string;
@@ -21,11 +22,42 @@ export class AppError extends Error {
 }
 
 export class EventDefinitionService {
+  // 事件定义缓存（变化不频繁，缓存时间较长）
+  private eventDefinitionsCache = cacheManager.getCache<string, EventDefinition[]>(
+    'eventDefinitions',
+    500, // 最大500条缓存
+    10 * 60 * 1000 // 10分钟过期（事件定义变化不频繁）
+  );
+
   constructor(private db: Connection) {}
+
+  /**
+   * 清除项目的事件定义缓存
+   */
+  clearProjectCache(projectId: string): void {
+    const keysToDelete: string[] = [];
+    for (const key of this.eventDefinitionsCache.keys()) {
+      if (key.includes(`projectId:${projectId}`)) {
+        keysToDelete.push(key);
+      }
+    }
+    keysToDelete.forEach(key => this.eventDefinitionsCache.delete(key));
+    console.log(`已清除项目 ${projectId} 的事件定义缓存`);
+  }
 
   // 获取事件定义列表
   async getEventDefinitions(projectId: string) {
     try {
+      // 生成缓存键
+      const cacheKey = `eventDefinitions:projectId:${projectId}`;
+
+      // 尝试从缓存获取
+      const cached = this.eventDefinitionsCache.get(cacheKey);
+      if (cached) {
+        console.log(`[缓存命中] 事件定义列表: ${cacheKey}`);
+        return cached;
+      }
+
       console.log('正在获取事件定义，项目ID:', projectId);
       
       const [rows] = await this.db.execute(
@@ -40,7 +72,7 @@ export class EventDefinitionService {
         throw new Error('Invalid query result format');
       }
 
-      return (rows as any[]).map(row => {
+      const result = (rows as any[]).map(row => {
         try {
           return {
             id: row.id,
@@ -56,6 +88,12 @@ export class EventDefinitionService {
           throw new Error(`Failed to parse event definition: ${err.message}`);
         }
       });
+
+      // 存入缓存
+      this.eventDefinitionsCache.set(cacheKey, result);
+      console.log(`[缓存存储] 事件定义列表: ${cacheKey}`);
+
+      return result;
     } catch (err: any) {
       console.error('获取事件定义失败:', err);
       throw err;
@@ -76,6 +114,9 @@ export class EventDefinitionService {
           JSON.stringify(eventDef.paramsSchema)
         ]
       );
+
+      // 清除该项目的缓存
+      this.clearProjectCache(eventDef.projectId);
     } catch (err: any) {
       // MySQL 唯一键冲突
       if (err && (err.code === 'ER_DUP_ENTRY' || err.errno === 1062)) {
@@ -108,6 +149,9 @@ export class EventDefinitionService {
       ]
     );
 
+    // 清除该项目的缓存
+    this.clearProjectCache(eventDef.projectId);
+
     return {
       ...eventDef,
       id
@@ -120,5 +164,8 @@ export class EventDefinitionService {
       'DELETE FROM event_definitions WHERE id = ? AND project_id = ?',
       [id, projectId]
     );
+
+    // 清除该项目的缓存
+    this.clearProjectCache(projectId);
   }
 } 
