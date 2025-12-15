@@ -143,6 +143,9 @@ class AnalyticsSDK {
   private isOnline: boolean = navigator.onLine;
   private storageKey: string;
   
+  // Beacon API 相关属性
+  private beaconSupported: boolean = typeof navigator !== 'undefined' && 'sendBeacon' in navigator;
+  
   // 自适应批量大小相关属性
   private currentBatchSize: number;
   private networkMetrics: NetworkMetrics | null = null;
@@ -320,15 +323,29 @@ class AnalyticsSDK {
       }
     });
 
-    // 页面卸载时发送剩余事件
+    // 页面卸载时使用 Beacon API 发送剩余事件
     window.addEventListener('beforeunload', () => {
-      this.flushQueue(true);
+      this.flushQueueWithBeacon();
+    });
+
+    // 使用 pagehide 事件作为补充（更可靠，支持更多浏览器）
+    window.addEventListener('pagehide', (event) => {
+      // 如果页面被缓存（bfcache），不使用 Beacon
+      if (event.persisted) {
+        return;
+      }
+      this.flushQueueWithBeacon();
     });
 
     // 页面隐藏时发送事件（移动端）
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) {
-        this.flushQueue();
+        // 页面隐藏时也尝试使用 Beacon 发送（如果支持）
+        if (this.beaconSupported && this.eventQueue.length > 0) {
+          this.flushQueueWithBeacon();
+        } else {
+          this.flushQueue();
+        }
       }
     });
 
@@ -1346,6 +1363,121 @@ class AnalyticsSDK {
   // 手动刷新队列（公开方法）
   public flush(): Promise<void> {
     return this.flushQueue(true);
+  }
+
+  // 使用 Beacon API 发送队列中的事件（页面关闭时使用）
+  private flushQueueWithBeacon(): void {
+    if (this.eventQueue.length === 0) {
+      return;
+    }
+
+    // 检查 Beacon API 支持
+    if (!this.beaconSupported) {
+      console.warn('[SDK] Beacon API 不支持，回退到同步发送');
+      // 回退方案：尝试同步发送（可能被取消）
+      this.flushQueue(true);
+      return;
+    }
+
+    // 准备所有待发送的事件
+    const eventsToSend = [...this.eventQueue];
+    this.eventQueue = []; // 清空队列
+
+    // 准备批量数据
+    const batchData = {
+      projectId: this.projectId,
+      events: eventsToSend.map(event => event.data),
+      batchSize: eventsToSend.length,
+      timestamp: Date.now(),
+      ...this.commonParams
+    };
+
+    try {
+      // 将数据转换为 Blob（Beacon API 支持 Blob）
+      const blob = new Blob([JSON.stringify(batchData)], {
+        type: 'application/json'
+      });
+
+      // 使用 Beacon API 发送数据
+      const sent = navigator.sendBeacon(this.endpoint, blob);
+
+      if (sent) {
+        console.log(`[SDK] 使用 Beacon API 成功发送 ${eventsToSend.length} 个事件`);
+      } else {
+        console.warn(`[SDK] Beacon API 发送失败，事件已保存到离线存储`);
+        // 发送失败，保存到离线存储
+        if (this.batchConfig.enableOfflineStorage) {
+          eventsToSend.forEach(event => {
+            this.saveEventToOfflineStorage(event);
+          });
+        }
+      }
+    } catch (error) {
+      console.error('[SDK] Beacon API 发送异常:', error);
+      // 发送失败，保存到离线存储
+      if (this.batchConfig.enableOfflineStorage) {
+        eventsToSend.forEach(event => {
+          this.saveEventToOfflineStorage(event);
+        });
+      }
+    }
+  }
+
+  // 使用 Beacon API 发送单个事件（公开方法）
+  public sendWithBeacon(eventName: string, eventParams?: Record<string, any>): boolean {
+    if (!this.beaconSupported) {
+      console.warn('[SDK] Beacon API 不支持，使用普通方式发送');
+      this.track(eventName, eventParams);
+      return false;
+    }
+
+    const event: TrackEvent = {
+      eventName,
+      eventParams,
+      timestamp: Date.now(),
+    };
+
+    const eventData = {
+      ...event,
+      projectId: this.projectId,
+      ...this.commonParams,
+    };
+
+    const batchData = {
+      projectId: this.projectId,
+      events: [eventData],
+      batchSize: 1,
+      timestamp: Date.now(),
+      ...this.commonParams
+    };
+
+    try {
+      const blob = new Blob([JSON.stringify(batchData)], {
+        type: 'application/json'
+      });
+
+      const sent = navigator.sendBeacon(this.endpoint, blob);
+      
+      if (sent) {
+        console.log(`[SDK] 使用 Beacon API 成功发送事件: ${eventName}`);
+      } else {
+        console.warn(`[SDK] Beacon API 发送失败，事件已加入队列`);
+        // 发送失败，加入队列
+        this.addToQueue(eventData, 'high');
+      }
+
+      return sent;
+    } catch (error) {
+      console.error('[SDK] Beacon API 发送异常:', error);
+      // 发送失败，加入队列
+      this.addToQueue(eventData, 'high');
+      return false;
+    }
+  }
+
+  // 检查 Beacon API 支持（公开方法）
+  public isBeaconSupported(): boolean {
+    return this.beaconSupported;
   }
 
   // 获取队列状态（公开方法）
