@@ -240,6 +240,7 @@ const EventAnalysis: React.FC = () => {
           <Table 
             columns={columns} 
             dataSource={analysisData}
+            rowKey={(record) => `${record.date}-${record.eventName}`}
             scroll={{ y: 500 }}
             pagination={analysisData.length > 50 ? {
               pageSize: 50,

@@ -152,7 +152,12 @@ const FunnelAnalysis: React.FC = () => {
           </Col>
           <Col span={12}>
             <Card title="转化明细">
-              <Table columns={columns} dataSource={funnelData} pagination={false} />
+              <Table 
+                columns={columns} 
+                dataSource={funnelData} 
+                rowKey="stage"
+                pagination={false} 
+              />
             </Card>
           </Col>
         </Row>
