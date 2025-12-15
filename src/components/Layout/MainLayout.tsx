@@ -383,10 +383,12 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
           style={{ 
             display: 'flex',
             flexDirection: 'column',
-            minHeight: '100vh',   // 保证至少等于视口高度
-            height: '100%',       // 随内容高度增长，避免页面很长时侧边栏不够长
-            position: 'relative',
-            overflow: 'hidden'
+          minHeight: '100vh',            // 至少等于视口高度
+          height: '100%',                // 随内容高度增长
+          alignSelf: 'stretch',          // 在父级中拉伸以匹配内容高度
+          position: 'relative',
+          overflow: 'hidden',
+          borderRadius: '0 12px 12px 0', // 右侧圆角
           }}
         >
         {/* Logo区域 - 固定顶部 */}

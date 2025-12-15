@@ -8,6 +8,8 @@ import { StatsService } from './services/statsService';
 import { AIService } from './services/aiService';
 import { EmailService } from './services/emailService';
 import dotenv from 'dotenv';
+import swaggerUi from 'swagger-ui-express';
+import { swaggerSpec } from './swagger';
 
 // 加载环境变量
 dotenv.config();
@@ -62,6 +64,9 @@ async function main() {
 
     // API路由
     app.use('/api', createApiRouter(db, summaryService));
+    // API 文档
+    app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+    app.get('/api/docs.json', (_, res) => res.json(swaggerSpec));
 
     // 错误处理中间件
     app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
