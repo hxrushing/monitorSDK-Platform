@@ -47,6 +47,9 @@ importers:
       uuid:
         specifier: ^9.0.0
         version: 9.0.1
+      web-vitals:
+        specifier: ^5.1.0
+        version: 5.1.0
       zustand:
         specifier: ^5.0.3
         version: 5.0.9(@types/react@18.3.27)(react@18.3.1)
@@ -2344,6 +2347,9 @@ packages:
         optional: true
       terser:
         optional: true
+
+  web-vitals@5.1.0:
+    resolution: {integrity: sha512-ArI3kx5jI0atlTtmV0fWU3fjpLmq/nD3Zr1iFFlJLaqa5wLBkUSzINwBPySCX/8jRyjlmy1Volw1kz1g9XE4Jg==}
 
   which-boxed-primitive@1.1.1:
     resolution: {integrity: sha512-TbX3mj8n0odCBFVlY8AxkqcHASw3L60jIuF8jFP78az3C2YhmGvqbHBpAjTRH2/xqYunrJ9g1jSyjCjpoWzIAA==}
@@ -5009,6 +5015,8 @@ snapshots:
       '@types/node': 18.19.130
       fsevents: 2.3.3
       less: 4.4.2
+
+  web-vitals@5.1.0: {}
 
   which-boxed-primitive@1.1.1:
     dependencies:

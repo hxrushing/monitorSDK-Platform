@@ -40,6 +40,42 @@ interface FunnelAnalysisRow extends RowDataPacket {
   total: number;
 }
 
+export interface PerformanceAnalysisQuery {
+  projectId: string;
+  startDate: string;
+  endDate: string;
+  metrics: string[];
+}
+
+interface PerformanceAnalysisRow extends RowDataPacket {
+  date: string;
+  metricName: string;
+  avgValue: number;
+  p50: number;
+  p75: number;
+  p95: number;
+  goodCount: number;
+  totalCount: number;
+}
+
+export interface PerformanceAnalysisQuery {
+  projectId: string;
+  startDate: string;
+  endDate: string;
+  metrics: string[];
+}
+
+interface PerformanceAnalysisRow extends RowDataPacket {
+  date: string;
+  metricName: string;
+  avgValue: number;
+  p50: number;
+  p75: number;
+  p95: number;
+  goodCount: number;
+  totalCount: number;
+}
+
 export class StatsService {
   constructor(private db: Connection) {}
 
@@ -310,6 +346,174 @@ export class StatsService {
     } catch (err: any) {
       console.error('获取Top 5访问项目数据失败:', err);
       throw new Error(`Failed to get top visited projects: ${err.message}`);
+    }
+  }
+
+  // 获取性能分析数据
+  async getPerformanceAnalysis(query: PerformanceAnalysisQuery) {
+    try {
+      console.log('开始获取性能分析数据:', query);
+      const { projectId, startDate, endDate, metrics } = query;
+      
+      if (!projectId || !startDate || !endDate || !metrics || metrics.length === 0) {
+        throw new Error('Missing required parameters');
+      }
+
+      // 验证日期格式
+      if (!this.isValidDate(startDate) || !this.isValidDate(endDate)) {
+        throw new Error('Invalid date format. Use YYYY-MM-DD');
+      }
+
+      // 性能指标阈值
+      const thresholds: Record<string, { good: number; needsImprovement: number }> = {
+        FCP: { good: 1800, needsImprovement: 3000 },
+        LCP: { good: 2500, needsImprovement: 4000 },
+        CLS: { good: 0.1, needsImprovement: 0.25 },
+        TTFB: { good: 800, needsImprovement: 1800 },
+        INP: { good: 200, needsImprovement: 500 },
+      };
+
+      const placeholders = metrics.map(() => '?').join(',');
+      
+      // 查询性能数据（从web_vitals事件中提取）
+      // 先获取所有符合条件的性能事件
+      const fetchSql = `
+        SELECT 
+          id,
+          DATE(timestamp) as date,
+          event_params
+        FROM events
+        WHERE project_id = ?
+          AND event_name = 'web_vitals'
+          AND DATE(timestamp) BETWEEN ? AND ?
+      `;
+
+      const [allRows] = await this.db.execute<any[]>(fetchSql, [projectId, startDate, endDate]);
+      
+      // 在内存中处理数据
+      const metricDataMap = new Map<string, Map<string, {
+        values: number[];
+        ratings: string[];
+      }>>();
+
+      allRows.forEach((row: any) => {
+        try {
+          const params = typeof row.event_params === 'string' 
+            ? JSON.parse(row.event_params) 
+            : row.event_params;
+          
+          const metricName = params['指标名称'];
+          const metricValue = Number(params['指标值']) || 0;
+          const rating = params['评级'] || 'unknown';
+          const date = String(row.date);
+
+          if (!metrics.includes(metricName)) {
+            return;
+          }
+
+          if (!metricDataMap.has(metricName)) {
+            metricDataMap.set(metricName, new Map());
+          }
+
+          const dateMap = metricDataMap.get(metricName)!;
+          if (!dateMap.has(date)) {
+            dateMap.set(date, { values: [], ratings: [] });
+          }
+
+          const data = dateMap.get(date)!;
+          data.values.push(metricValue);
+          data.ratings.push(rating);
+        } catch (err) {
+          console.warn('解析性能事件数据失败:', err);
+        }
+      });
+
+      // 计算统计数据
+      const details: any[] = [];
+      metricDataMap.forEach((dateMap, metricName) => {
+        dateMap.forEach((data, date) => {
+          const sortedValues = [...data.values].sort((a, b) => a - b);
+          const count = sortedValues.length;
+          const avgValue = count > 0 
+            ? sortedValues.reduce((sum, val) => sum + val, 0) / count 
+            : 0;
+          const p50 = count > 0 ? sortedValues[Math.floor(count * 0.5)] : 0;
+          const p75 = count > 0 ? sortedValues[Math.floor(count * 0.75)] : 0;
+          const p95 = count > 0 ? sortedValues[Math.floor(count * 0.95)] : 0;
+          const goodCount = data.ratings.filter(r => r === 'good').length;
+          const goodRate = count > 0 ? goodCount / count : 0;
+
+          details.push({
+            date,
+            metricName,
+            avgValue,
+            p50,
+            p75,
+            p95,
+            goodRate,
+            totalCount: count,
+          });
+        });
+      });
+
+      details.sort((a, b) => {
+        if (a.date !== b.date) {
+          return a.date.localeCompare(b.date);
+        }
+        return a.metricName.localeCompare(b.metricName);
+      });
+
+      console.log('性能分析处理完成，详情数量:', details.length);
+
+      // 计算汇总数据
+      const summaryMap = new Map<string, {
+        metricName: string;
+        totalValue: number;
+        totalGood: number;
+        totalCount: number;
+      }>();
+
+      details.forEach(detail => {
+        const existing = summaryMap.get(detail.metricName) || {
+          metricName: detail.metricName,
+          totalValue: 0,
+          totalGood: 0,
+          totalCount: 0,
+        };
+        existing.totalValue += detail.avgValue * detail.totalCount;
+        existing.totalGood += detail.goodRate * detail.totalCount;
+        existing.totalCount += detail.totalCount;
+        summaryMap.set(detail.metricName, existing);
+      });
+
+      const summary = Array.from(summaryMap.values()).map(item => {
+        const avgValue = item.totalCount > 0 ? item.totalValue / item.totalCount : 0;
+        const goodRate = item.totalCount > 0 ? item.totalGood / item.totalCount : 0;
+        const threshold = thresholds[item.metricName] || { good: 0, needsImprovement: 0 };
+        
+        let rating: 'good' | 'needs-improvement' | 'poor' = 'good';
+        if (item.metricName === 'CLS') {
+          rating = avgValue <= threshold.good ? 'good' : avgValue <= threshold.needsImprovement ? 'needs-improvement' : 'poor';
+        } else {
+          rating = avgValue <= threshold.good ? 'good' : avgValue <= threshold.needsImprovement ? 'needs-improvement' : 'poor';
+        }
+
+        return {
+          metricName: item.metricName,
+          avgValue,
+          goodRate,
+          totalCount: item.totalCount,
+          rating,
+        };
+      });
+
+      return {
+        summary,
+        details,
+      };
+    } catch (err: any) {
+      console.error('获取性能分析数据失败:', err);
+      throw new Error(`Failed to get performance analysis: ${err.message}`);
     }
   }
 } 

@@ -19,6 +19,7 @@ const SystemSettings = lazy(() => import('@/pages/SystemSettings'));
 const AISummarySettings = lazy(() => import('@/pages/AISummarySettings'));
 const Prediction = lazy(() => import('@/pages/Prediction'));
 const PredictionHistory = lazy(() => import('@/pages/PredictionHistory'));
+const PerformanceAnalysis = lazy(() => import('@/pages/PerformanceAnalysis'));
 
 const isAuthed = () => !!localStorage.getItem('token') || !!localStorage.getItem('userInfo');
 
@@ -66,6 +67,11 @@ const router = createBrowserRouter([
       {
         path: 'funnel',
         element: withSuspense(<FunnelAnalysis />),
+        errorElement: <RouteErrorBoundary />,
+      },
+      {
+        path: 'performance',
+        element: withSuspense(<PerformanceAnalysis />),
         errorElement: <RouteErrorBoundary />,
       },
       {

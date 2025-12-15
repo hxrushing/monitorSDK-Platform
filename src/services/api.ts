@@ -282,5 +282,40 @@ export const apiService = {
   async deletePredictionRecord(id: string) {
     const data = await api.delete(`/prediction/records/${id}`);
     return data;
+  },
+
+  // 性能分析相关API
+  async getPerformanceAnalysis(params: {
+    projectId: string;
+    startDate: string;
+    endDate: string;
+    metrics: string[];
+  }): Promise<{
+    summary: Array<{
+      metricName: string;
+      avgValue: number;
+      goodRate: number;
+      totalCount: number;
+      rating: 'good' | 'needs-improvement' | 'poor';
+    }>;
+    details: Array<{
+      date: string;
+      metricName: string;
+      avgValue: number;
+      p50: number;
+      p75: number;
+      p95: number;
+      goodRate: number;
+      totalCount: number;
+    }>;
+  }> {
+    const data = await api.get('/performance/analysis', {
+      params: {
+        ...params,
+        metrics: params.metrics.join(',')
+      },
+      timeout: 60000
+    });
+    return data.data;
   }
 }; 

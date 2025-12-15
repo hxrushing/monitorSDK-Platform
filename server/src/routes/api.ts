@@ -471,6 +471,33 @@ export function createApiRouter(db: Connection, summaryService?: SummaryService)
     }
   });
 
+  // 获取性能分析数据
+  router.get('/performance/analysis', async (req, res) => {
+    try {
+      const params = {
+        projectId: req.query.projectId as string,
+        startDate: req.query.startDate as string,
+        endDate: req.query.endDate as string,
+        metrics: (req.query.metrics as string)?.split(',').filter(Boolean) || []
+      };
+
+      console.log('接收到性能分析请求:', params);
+
+      if (!params.projectId || !params.startDate || !params.endDate || !params.metrics.length) {
+        return res.status(400).json({ 
+          success: false, 
+          error: 'Missing required parameters' 
+        });
+      }
+
+      const data = await statsService.getPerformanceAnalysis(params);
+      res.json({ success: true, data });
+    } catch (error) {
+      console.error('Error getting performance analysis:', error);
+      res.status(500).json({ success: false, error: 'Internal Server Error' });
+    }
+  });
+
   // 创建项目
   router.post('/projects', async (req, res) => {
     try {

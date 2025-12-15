@@ -11,7 +11,8 @@ import {
   BugOutlined,
   CodeOutlined,
   RobotOutlined,
-  HistoryOutlined
+  HistoryOutlined,
+  ThunderboltOutlined
 } from '@ant-design/icons';
 import { Layout, Menu, Button, theme, Select, Modal, Form, Input, message, Dropdown, Space, Switch, Tooltip, Drawer, Typography, Divider } from 'antd';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -119,6 +120,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
     '/app/dashboard': 'group-analysis',
     '/app/events': 'group-analysis',
     '/app/funnel': 'group-analysis',
+    '/app/performance': 'group-analysis',
     '/app/prediction': 'group-prediction',
     '/app/prediction/history': 'group-prediction',
     '/app/event-management': 'group-management',
@@ -148,6 +150,11 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
           key: '/app/funnel',
           icon: <ApartmentOutlined />,
           label: '漏斗',
+        },
+        {
+          key: '/app/performance',
+          icon: <ThunderboltOutlined />,
+          label: '性能',
         },
       ]
     },

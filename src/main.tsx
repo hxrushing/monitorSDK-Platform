@@ -9,6 +9,7 @@ import useGlobalStore from '@/store/globalStore'
 import ErrorBoundary from '@/components/ErrorBoundary'
 import logo1 from '@/assets/logo1.jpg'
 import logo2 from '@/assets/logo2.jpg'
+import { initPerformanceMonitoring } from '@/utils/performance'
 
 // 尽早预加载 LCP 图像（在 React 渲染之前）
 // 这样浏览器可以在解析 HTML 后立即开始加载图片
@@ -60,6 +61,15 @@ const Root = () => {
     </ConfigProvider>
   )
 }
+
+// 初始化性能监控
+// 从 localStorage 获取项目ID，如果不存在则使用默认值
+const getProjectId = (): string => {
+  const storedProjectId = localStorage.getItem('selectedProjectId');
+  return storedProjectId || 'demo-project';
+};
+
+initPerformanceMonitoring(getProjectId());
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
