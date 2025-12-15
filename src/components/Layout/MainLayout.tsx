@@ -376,18 +376,19 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
       <PreloadResources />
       <Layout style={{ minHeight: '100vh' }}>
         <Sider 
-        trigger={null} 
-        collapsible 
-        collapsed={collapsed} 
-        theme={themeMode === 'dark' ? 'dark' : 'light'}
-        style={{ 
-          display: 'flex',
-          flexDirection: 'column',
-          height: '100vh',
-          position: 'relative',
-          overflow: 'hidden'
-        }}
-      >
+          trigger={null} 
+          collapsible 
+          collapsed={collapsed} 
+          theme={themeMode === 'dark' ? 'dark' : 'light'}
+          style={{ 
+            display: 'flex',
+            flexDirection: 'column',
+            minHeight: '100vh',   // 保证至少等于视口高度
+            height: '100%',       // 随内容高度增长，避免页面很长时侧边栏不够长
+            position: 'relative',
+            overflow: 'hidden'
+          }}
+        >
         {/* Logo区域 - 固定顶部 */}
         <div
           ref={logoRef}

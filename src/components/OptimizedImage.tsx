@@ -11,6 +11,9 @@ interface OptimizedImageProps {
   fallback?: string;
   fetchPriority?: 'high' | 'low' | 'auto';
   isLCP?: boolean; // 标记是否为 LCP 图像
+  sizes?: string; // 响应式尺寸提示
+  srcSet?: string; // 自定义 srcset
+  placeholder?: string; // 低清晰度占位
 }
 
 // 检查浏览器是否支持 WebP（缓存结果）
@@ -52,10 +55,15 @@ const OptimizedImage: React.FC<OptimizedImageProps> = ({
   loading = 'lazy',
   fallback,
   fetchPriority,
-  isLCP = false
+  isLCP = false,
+  sizes,
+  srcSet,
+  placeholder
 }) => {
-  const [imgSrc, setImgSrc] = useState(src);
+  const [imgSrc, setImgSrc] = useState(placeholder || src);
   const [hasError, setHasError] = useState(false);
+  const [isInView, setIsInView] = useState(loading === 'eager' || isLCP);
+  const imgRef = useRef<HTMLImageElement>(null);
 
   // 尝试转换为 WebP 格式（如果浏览器支持）
   // 注意：当前已禁用 WebP 自动转换功能
@@ -74,25 +82,38 @@ const OptimizedImage: React.FC<OptimizedImageProps> = ({
   //   return webpSrc;
   // };
 
+  // 懒加载：进入视口时再切换到真实 src/srcSet
   useEffect(() => {
     // 重置错误状态当 src 改变时
     setHasError(false);
-    
-    // 由于项目中可能没有 WebP 版本，直接使用原始图片
-    // 如果需要使用 WebP，请确保对应的 .webp 文件存在
-    setImgSrc(src);
-    
-    // 如果将来需要支持 WebP，可以取消下面的注释：
-    // // 检查是否支持 WebP，如果支持则尝试使用 WebP 版本
-    // if (checkWebPSupport()) {
-    //   const webpSrc = getWebPSrc(src);
-    //   // 如果 WebP 版本存在（通过尝试加载检测），使用它
-    //   // 这里简化处理，直接尝试 WebP，失败时回退到原始图片
-    //   setImgSrc(webpSrc);
-    // } else {
-    //   setImgSrc(src);
-    // }
-  }, [src]);
+    setImgSrc(placeholder || src);
+
+    if (loading === 'eager' || isLCP) {
+      setIsInView(true);
+      setImgSrc(src);
+      return;
+    }
+
+    const node = imgRef.current;
+    if (!node) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            setIsInView(true);
+            setImgSrc(src);
+            observer.disconnect();
+          }
+        });
+      },
+      { rootMargin: '200px 0px' } // 提前加载
+    );
+
+    observer.observe(node);
+
+    return () => observer.disconnect();
+  }, [src, loading, isLCP, placeholder]);
 
   const handleError = () => {
     // 如果 WebP 加载失败，回退到原始格式
@@ -113,9 +134,6 @@ const OptimizedImage: React.FC<OptimizedImageProps> = ({
   // LCP 图像应该使用同步解码，避免延迟
   const decoding = isLCP ? 'sync' : 'async';
 
-  // 使用 ref 来设置 fetchpriority 属性（React 要求小写）
-  const imgRef = useRef<HTMLImageElement>(null);
-
   useEffect(() => {
     if (imgRef.current && finalFetchPriority) {
       // 使用小写的 fetchpriority，这是 DOM 标准属性名
@@ -127,6 +145,8 @@ const OptimizedImage: React.FC<OptimizedImageProps> = ({
     <img
       ref={imgRef}
       src={imgSrc}
+      srcSet={isInView ? srcSet : undefined}
+      sizes={isInView ? sizes : undefined}
       alt={alt}
       width={width}
       height={height}

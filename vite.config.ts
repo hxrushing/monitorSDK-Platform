@@ -38,16 +38,18 @@ export default defineConfig({
           // React 相关
           'react-vendor': ['react', 'react-dom', 'react-router-dom'],
           // Ant Design
-          'antd-vendor': ['antd'],
-          // 图表库（按需加载，不在这里打包）
-          // '@ant-design/plots': ['@ant-design/plots'],
+          'antd-vendor': ['antd', '@ant-design/icons'],
+          // 图表库
+          'charts-vendor': ['@ant-design/plots'],
+          // 工具库
+          'utils-vendor': ['dayjs', 'lodash', 'axios', 'zustand'],
+          // SDK 单独拆分，方便按需加载与缓存
+          'sdk-vendor': ['src/sdk/index.ts'],
         },
         // 优化 chunk 大小
         chunkFileNames: 'js/[name]-[hash].js',
         entryFileNames: 'js/[name]-[hash].js',
         assetFileNames: 'assets/[name]-[hash].[ext]',
-        // Worker 文件命名
-        workerChunkFileNames: 'js/[name]-[hash].js'
       }
     },
     // 启用代码压缩（使用 esbuild，更快）
@@ -57,6 +59,16 @@ export default defineConfig({
     // Tree Shaking 默认启用，无需配置
     // 设置 chunk 大小警告阈值
     chunkSizeWarningLimit: 1000,
+  },
+  // Worker 产物命名（独立于主构建）
+  worker: {
+    rollupOptions: {
+      output: {
+        chunkFileNames: 'js/[name]-[hash].js',
+        entryFileNames: 'js/[name]-[hash].js',
+        assetFileNames: 'assets/[name]-[hash].[ext]'
+      }
+    }
   },
   // 优化依赖预构建
   optimizeDeps: {
