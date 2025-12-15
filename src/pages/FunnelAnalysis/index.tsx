@@ -1,5 +1,5 @@
 import React, { useState, useEffect, Suspense } from 'react';
-import { Card, Row, Col, DatePicker, Button, Select, Table, Spin, message } from 'antd';
+import { Card, Row, Col, DatePicker, Select, Table, Spin, message } from 'antd';
 // 懒加载图表组件，减少初始 bundle 大小
 const Funnel = React.lazy(() => import('@ant-design/plots').then(m => ({ default: m.Funnel })));
 import dayjs from 'dayjs';
@@ -64,16 +64,13 @@ const FunnelAnalysis: React.FC = () => {
     fetchEventDefinitions();
   }, [selectedProjectId]);
 
-  // 当项目切换时，自动刷新漏斗数据
+  // 当项目、阶段或日期范围变化时，自动刷新漏斗数据
   useEffect(() => {
     if (selectedStages.length > 0) {
       fetchFunnelData();
     }
-  }, [selectedProjectId, selectedStages]);
-
-  const handleSearch = () => {
-    fetchFunnelData();
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedProjectId, selectedStages, dateRange]);
 
   const columns = [
     {
@@ -141,9 +138,6 @@ const FunnelAnalysis: React.FC = () => {
                 value={selectedStages}
                 onChange={setSelectedStages}
               />
-            </Col>
-            <Col>
-              <Button type="primary" onClick={handleSearch}>查询</Button>
             </Col>
           </Row>
         </Card>

@@ -1,12 +1,11 @@
-import React, { useState, useEffect, Suspense, useMemo, useCallback, memo } from 'react';
-import { Card, Row, Col, DatePicker, Select, Table, Button, Spin, message, Space, Badge } from 'antd';
+import React, { useState, useEffect, Suspense, useMemo, useCallback } from 'react';
+import { Card, Row, Col, DatePicker, Select, Table, Spin, message, Space, Badge } from 'antd';
 // 懒加载图表组件，减少初始 bundle 大小
 const Line = React.lazy(() => import('@ant-design/plots').then(m => ({ default: m.Line })));
 import { 
   BarChartOutlined, 
   CalendarOutlined, 
   FilterOutlined, 
-  SearchOutlined,
   LineChartOutlined,
   TableOutlined,
   ClockCircleOutlined,
@@ -75,16 +74,13 @@ const EventAnalysis: React.FC = () => {
     fetchEventDefinitions();
   }, [selectedProjectId]);
 
-  // 当项目切换时，自动刷新分析数据
+  // 当项目、事件或日期范围变化时，自动刷新分析数据
   useEffect(() => {
     if (selectedEvents.length > 0) {
       fetchAnalysisData();
     }
-  }, [selectedProjectId, selectedEvents]);
-
-  const handleSearch = useCallback(() => {
-    fetchAnalysisData();
-  }, [selectedProjectId, dateRange, selectedEvents]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedProjectId, selectedEvents, dateRange]);
 
   const handleDateRangeChange = useCallback((dates: any) => {
     if (dates) {
@@ -212,11 +208,6 @@ const EventAnalysis: React.FC = () => {
                   onChange={handleEventsChange}
                 />
               </Space.Compact>
-            </Col>
-            <Col>
-              <Button type="primary" icon={<SearchOutlined />} onClick={handleSearch}>
-                查询
-              </Button>
             </Col>
           </Row>
         </Card>

@@ -121,6 +121,19 @@ const PredictionHistory: React.FC = () => {
     }
   }, []);
 
+  // 筛选条件变化处理
+  const handleMetricTypeChange = useCallback((value: string) => {
+    setMetricType(value);
+  }, []);
+
+  const handleModelTypeChange = useCallback((value: string) => {
+    setModelType(value);
+  }, []);
+
+  const handleDateRangeChange = useCallback((dates: any) => {
+    setDateRange(dates as [dayjs.Dayjs, dayjs.Dayjs] | null);
+  }, []);
+
   // 获取指标名称
   const getMetricName = (metric: string) => {
     const names: Record<string, string> = {
@@ -250,7 +263,7 @@ const PredictionHistory: React.FC = () => {
             <div style={{ marginBottom: 8 }}>预测指标：</div>
             <Select
               value={metricType}
-              onChange={useCallback((value: string) => setMetricType(value), [])}
+              onChange={handleMetricTypeChange}
               allowClear
               placeholder="全部"
               style={{ width: '100%' }}
@@ -264,7 +277,7 @@ const PredictionHistory: React.FC = () => {
             <div style={{ marginBottom: 8 }}>预测模型：</div>
             <Select
               value={modelType}
-              onChange={useCallback((value: string) => setModelType(value), [])}
+              onChange={handleModelTypeChange}
               allowClear
               placeholder="全部"
               style={{ width: '100%' }}
@@ -273,21 +286,13 @@ const PredictionHistory: React.FC = () => {
               <Option value="gru">GRU</Option>
             </Select>
           </Col>
-          <Col span={8}>
+          <Col span={12}>
             <div style={{ marginBottom: 8 }}>预测时间：</div>
             <RangePicker
               value={dateRange}
-              onChange={useCallback((dates: any) => {
-                setDateRange(dates as [dayjs.Dayjs, dayjs.Dayjs] | null);
-              }, [])}
+              onChange={handleDateRangeChange}
               style={{ width: '100%' }}
             />
-          </Col>
-          <Col span={4}>
-            <div style={{ marginBottom: 8 }}>&nbsp;</div>
-            <Button onClick={fetchRecords} loading={loading}>
-              查询
-            </Button>
           </Col>
         </Row>
 
