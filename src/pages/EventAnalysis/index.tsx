@@ -17,6 +17,7 @@ import { apiService } from '@/services/api';
 import type { EventDefinition } from '@/types';
 import useGlobalStore from '@/store/globalStore';
 import { adaptiveChartSampling } from '@/utils/dataSampling';
+import { useDataSamplingWorker } from '@/hooks/useWorker';
 
 const { RangePicker } = DatePicker;
 
@@ -30,6 +31,20 @@ const EventAnalysis: React.FC = () => {
   const [eventOptions, setEventOptions] = useState<EventDefinition[]>([]);
   const [analysisData, setAnalysisData] = useState<any[]>([]);
   const selectedProjectId = useGlobalStore(state => state.selectedProjectId);
+  
+  // 使用 Worker 处理大数据采样
+  const [sampledChartData, setSampledChartData] = useState<any[]>([]);
+  const { postMessage: sampleData, isProcessing: isSampling } = useDataSamplingWorker<any[]>(
+    (result) => {
+      setSampledChartData(result);
+    },
+    {
+      onError: (error) => {
+        console.error('[EventAnalysis] Worker 采样失败:', error);
+        // Worker 失败时，会在 useEffect 中自动回退到同步方式
+      }
+    }
+  );
 
   // 获取事件定义列表
   const fetchEventDefinitions = async () => {
@@ -155,7 +170,7 @@ const EventAnalysis: React.FC = () => {
     },
   ], [eventOptions]);
 
-  // 准备图表数据并应用LTTB采样 - 使用 useMemo 优化
+  // 准备图表数据 - 使用 useMemo 优化
   const chartData = useMemo(() => {
     return analysisData.map(item => ({
       date: item.date,
@@ -164,10 +179,40 @@ const EventAnalysis: React.FC = () => {
     }));
   }, [analysisData, eventOptions]);
   
-  // 使用LTTB算法进行智能采样，优化大数据量图表渲染性能
-  const sampledChartData = useMemo(() => {
-    return adaptiveChartSampling(chartData, 500, 1000, 'date', 'value', 'type');
-  }, [chartData]);
+  // 使用 Worker 进行大数据采样，避免阻塞主线程
+  useEffect(() => {
+    if (chartData.length === 0) {
+      setSampledChartData([]);
+      return;
+    }
+
+    // 数据量小于阈值时，直接使用原数据（不采样）
+    if (chartData.length <= 500) {
+      setSampledChartData(chartData);
+      return;
+    }
+
+    // 数据量大于阈值时，使用 Worker 进行采样
+    // 如果 Worker 失败，会在 onError 中处理，这里使用 try-catch 作为额外保护
+    try {
+      sampleData({
+        type: 'adaptive',
+        payload: {
+          data: chartData,
+          threshold: 500,
+          maxPoints: 1000,
+          xField: 'date',
+          yField: 'value',
+          seriesField: 'type'
+        }
+      });
+    } catch (error) {
+      // Worker 不可用时，回退到同步方式
+      console.warn('[EventAnalysis] Worker 不可用，使用同步采样:', error);
+      const fallbackResult = adaptiveChartSampling(chartData, 500, 1000, 'date', 'value', 'type');
+      setSampledChartData(fallbackResult);
+    }
+  }, [chartData, sampleData]);
 
   const lineConfig = useMemo(() => ({
     data: sampledChartData,
@@ -178,6 +223,9 @@ const EventAnalysis: React.FC = () => {
     animation: false,
     renderer: ('canvas' as 'canvas'),
   }), [sampledChartData]);
+
+  // 图表加载状态（Worker 处理中时显示加载）
+  const chartLoading = isSampling && chartData.length > 500;
 
   return (
     <Spin spinning={loading}>
@@ -218,13 +266,16 @@ const EventAnalysis: React.FC = () => {
               <LineChartOutlined style={{ color: '#1890ff' }} />
               <span>事件趋势</span>
               <Badge count={selectedEvents.length} style={{ backgroundColor: '#52c41a' }} />
+              {chartLoading && <Badge status="processing" text="数据处理中..." />}
             </Space>
           } 
           style={{ marginTop: 16 }}
         >
-          <Suspense fallback={<Spin size="large" style={{ display: 'block', textAlign: 'center', padding: '40px' }} />}>
-            <Line {...lineConfig} />
-          </Suspense>
+          <Spin spinning={chartLoading} tip="正在处理大数据，请稍候...">
+            <Suspense fallback={<Spin size="large" style={{ display: 'block', textAlign: 'center', padding: '40px' }} />}>
+              {sampledChartData.length > 0 && <Line {...lineConfig} />}
+            </Suspense>
+          </Spin>
         </Card>
 
         <Card 

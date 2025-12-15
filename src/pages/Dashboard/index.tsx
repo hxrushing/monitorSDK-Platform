@@ -19,6 +19,7 @@ import { adaptiveChartSampling } from '@/utils/dataSampling';
 import { ChartLoading } from '@/components/Loading';
 import { DashboardSkeleton } from '@/components/Skeleton';
 import StatisticCard from '@/components/StatisticCard';
+import { useDataSamplingWorker } from '@/hooks/useWorker';
 
 const { RangePicker } = DatePicker;
 
@@ -39,6 +40,20 @@ const Dashboard: React.FC = () => {
   const [topProjects, setTopProjects] = useState<TopProject[]>([]);
   const [showHelp, setShowHelp] = useState(false);
   const selectedProjectId = useGlobalStore(state => state.selectedProjectId);
+  
+  // 使用 Worker 处理大数据采样
+  const [sampledChartData, setSampledChartData] = useState<any[]>([]);
+  const { postMessage: sampleData, isProcessing: isSampling } = useDataSamplingWorker<any[]>(
+    (result) => {
+      setSampledChartData(result);
+    },
+    {
+      onError: (error) => {
+        console.error('[Dashboard] Worker 采样失败:', error);
+        // Worker 失败时，会在 useEffect 中自动回退到同步方式
+      }
+    }
+  );
 
   const fetchData = useCallback(async () => {
     if (!selectedProjectId) {
@@ -129,7 +144,7 @@ const Dashboard: React.FC = () => {
     fetchData();
   }, [fetchData]);
 
-  // 准备图表数据并应用LTTB采样 - 使用useMemo优化
+  // 准备图表数据 - 使用useMemo优化
   const chartData = useMemo(() => {
     return statsData.map(item => [
       { date: item.date, value: item.pv, type: 'PV' },
@@ -137,10 +152,40 @@ const Dashboard: React.FC = () => {
     ]).flat();
   }, [statsData]);
   
-  // 使用LTTB算法进行智能采样，优化大数据量图表渲染性能
-  const sampledChartData = useMemo(() => {
-    return adaptiveChartSampling(chartData, 500, 1000, 'date', 'value', 'type');
-  }, [chartData]);
+  // 使用 Worker 进行大数据采样，避免阻塞主线程
+  useEffect(() => {
+    if (chartData.length === 0) {
+      setSampledChartData([]);
+      return;
+    }
+
+    // 数据量小于阈值时，直接使用原数据（不采样）
+    if (chartData.length <= 500) {
+      setSampledChartData(chartData);
+      return;
+    }
+
+    // 数据量大于阈值时，使用 Worker 进行采样
+    // 如果 Worker 失败，会在 onError 中处理，这里使用 try-catch 作为额外保护
+    try {
+      sampleData({
+        type: 'adaptive',
+        payload: {
+          data: chartData,
+          threshold: 500,
+          maxPoints: 1000,
+          xField: 'date',
+          yField: 'value',
+          seriesField: 'type'
+        }
+      });
+    } catch (error) {
+      // Worker 不可用时，回退到同步方式
+      console.warn('[Dashboard] Worker 不可用，使用同步采样:', error);
+      const fallbackResult = adaptiveChartSampling(chartData, 500, 1000, 'date', 'value', 'type');
+      setSampledChartData(fallbackResult);
+    }
+  }, [chartData, sampleData]);
 
   const lineConfig = useMemo(() => ({
     data: sampledChartData,
@@ -151,6 +196,9 @@ const Dashboard: React.FC = () => {
     animation: false,
     renderer: ('canvas' as 'canvas'),
   }), [sampledChartData]);
+
+  // 图表加载状态（Worker 处理中时显示加载）
+  const chartLoading = isSampling && chartData.length > 500;
 
   const topProjectsColumns = useMemo(() => [
     {
@@ -330,13 +378,16 @@ const Dashboard: React.FC = () => {
             <Space>
               <LineChartOutlined style={{ color: '#1890ff' }} />
               <span>访问趋势</span>
+              {chartLoading && <Badge status="processing" text="数据处理中..." />}
             </Space>
           } 
           style={{ marginTop: 16 }}
         >
-          <Suspense fallback={<ChartLoading />}>
-            <Line {...lineConfig} />
-          </Suspense>
+          <Spin spinning={chartLoading} tip="正在处理大数据，请稍候...">
+            <Suspense fallback={<ChartLoading />}>
+              {sampledChartData.length > 0 && <Line {...lineConfig} />}
+            </Suspense>
+          </Spin>
         </Card>
 
         <Row gutter={[16, 16]} style={{ marginTop: 16 }}>

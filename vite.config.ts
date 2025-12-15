@@ -45,7 +45,9 @@ export default defineConfig({
         // 优化 chunk 大小
         chunkFileNames: 'js/[name]-[hash].js',
         entryFileNames: 'js/[name]-[hash].js',
-        assetFileNames: 'assets/[name]-[hash].[ext]'
+        assetFileNames: 'assets/[name]-[hash].[ext]',
+        // Worker 文件命名
+        workerChunkFileNames: 'js/[name]-[hash].js'
       }
     },
     // 启用代码压缩（使用 esbuild，更快）
