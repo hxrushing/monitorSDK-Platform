@@ -1,5 +1,5 @@
 import * as cron from 'node-cron';
-import { Connection } from 'mysql2/promise';
+import { Connection, Pool } from 'mysql2/promise';
 import { SummaryService } from './summaryService';
 import { StatsService } from './statsService';
 import { AIService } from './aiService';
@@ -9,7 +9,7 @@ export class SchedulerService {
   private tasks: Map<string, cron.ScheduledTask> = new Map();
 
   constructor(
-    private db: Connection,
+    private db: Connection | Pool,
     private summaryService: SummaryService
   ) {}
 

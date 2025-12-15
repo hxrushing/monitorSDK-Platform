@@ -1,4 +1,4 @@
-import { Connection } from 'mysql2/promise';
+import { Connection, Pool } from 'mysql2/promise';
 import crypto from 'crypto';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -23,8 +23,10 @@ export interface RegisterResponse {
   error?: string;
 }
 
+type DBClient = Connection | Pool;
+
 export class UserService {
-  constructor(private db: Connection) {}
+  constructor(private db: DBClient) {}
 
   // 用户注册
   async register(username: string, password: string, email: string): Promise<RegisterResponse> {

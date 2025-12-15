@@ -1,5 +1,7 @@
-import { Connection, RowDataPacket } from 'mysql2/promise';
+import { Connection, Pool, RowDataPacket } from 'mysql2/promise';
 import { cacheManager } from '../utils/cache';
+
+type DBClient = Connection | Pool;
 
 export interface StatsQuery {
   projectId: string;
@@ -115,7 +117,7 @@ export class StatsService {
     3 * 60 * 1000 // 3分钟过期（性能分析计算复杂）
   );
 
-  constructor(private db: Connection) {}
+  constructor(private db: DBClient) {}
 
   /**
    * 生成缓存键

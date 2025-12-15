@@ -1,5 +1,7 @@
-import { Connection, RowDataPacket } from 'mysql2/promise';
+import { Connection, Pool, RowDataPacket } from 'mysql2/promise';
 import axios from 'axios';
+
+type DBClient = Connection | Pool;
 
 export interface PredictionRequest {
   projectId: string;
@@ -29,7 +31,7 @@ export interface PredictionResponse {
 export class PredictionService {
   private mlServiceUrl: string;
 
-  constructor(private db: Connection) {
+  constructor(private db: DBClient) {
     // 从环境变量获取ML服务地址，默认使用127.0.0.1避免IPv6/IPv4解析问题
     this.mlServiceUrl = process.env.ML_SERVICE_URL || 'http://127.0.0.1:5000';
   }

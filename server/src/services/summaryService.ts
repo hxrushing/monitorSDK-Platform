@@ -1,4 +1,4 @@
-import { Connection, RowDataPacket } from 'mysql2/promise';
+import { Connection, Pool, RowDataPacket } from 'mysql2/promise';
 import MarkdownIt from 'markdown-it';
 import { StatsService, StatsData } from './statsService';
 import { AIService, SummaryData } from './aiService';
@@ -47,7 +47,7 @@ export class SummaryService {
   private progressListeners: Map<string, Set<ProgressListener>> = new Map();
 
   constructor(
-    private db: Connection,
+    private db: Connection | Pool,
     private statsService: StatsService,
     private aiService: AIService,
     private emailService: EmailService

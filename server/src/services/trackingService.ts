@@ -1,4 +1,4 @@
-import { Connection } from 'mysql2/promise';
+import { Connection, Pool, PoolConnection } from 'mysql2/promise';
 import { v4 as uuidv4 } from 'uuid';
 import { cacheManager } from '../utils/cache';
 
@@ -16,8 +16,10 @@ interface EventData {
   timestamp: number;
 }
 
+type DBClient = Connection | Pool;
+
 export class TrackingService {
-  constructor(private db: Connection) {}
+  constructor(private db: DBClient) {}
 
   /**
    * 清除项目相关的所有统计缓存
@@ -44,6 +46,26 @@ export class TrackingService {
     });
   }
 
+  /**
+   * 获取事务连接（兼容 Pool / Connection）
+   */
+  private async getTransactionConnection(): Promise<{
+    conn: Connection | PoolConnection;
+    release: () => Promise<void> | void;
+  }> {
+    if ('getConnection' in this.db) {
+      const conn = await this.db.getConnection();
+      return {
+        conn,
+        release: () => conn.release(),
+      };
+    }
+    return {
+      conn: this.db,
+      release: () => {},
+    };
+  }
+
   // 批量处理事件
   async trackBatchEvents(batchData: {
     projectId: string;
@@ -61,7 +83,7 @@ export class TrackingService {
       let processedCount = 0;
 
       // 使用事务处理批量插入
-      await this.db.beginTransaction();
+      const { conn, release } = await this.getTransactionConnection();
 
       try {
         for (const eventData of batchData.events) {
@@ -84,7 +106,7 @@ export class TrackingService {
             ];
 
             // 插入事件数据
-            await this.db.execute(
+            await conn.execute(
               'INSERT INTO events (project_id, event_name, event_params, user_id, device_info, timestamp) VALUES (?, ?, ?, ?, ?, ?)',
               params
             );
@@ -97,7 +119,7 @@ export class TrackingService {
         }
 
         // 提交事务
-        await this.db.commit();
+        await conn.commit();
         console.log(`批量事件处理完成，成功: ${processedCount}, 失败: ${failedEvents.length}`);
 
         // 如果有成功插入的事件，清除该项目的统计缓存
@@ -112,8 +134,11 @@ export class TrackingService {
         };
       } catch (error) {
         // 回滚事务
-        await this.db.rollback();
+        await conn.rollback();
         throw error;
+      }
+      finally {
+        await release();
       }
     } catch (err: any) {
       console.error('批量事件处理失败:', err);

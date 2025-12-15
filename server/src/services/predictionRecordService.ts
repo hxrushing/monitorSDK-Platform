@@ -1,5 +1,7 @@
-import { Connection, RowDataPacket } from 'mysql2/promise';
+import { Connection, Pool, RowDataPacket } from 'mysql2/promise';
 import { v4 as uuidv4 } from 'uuid';
+
+type DBClient = Connection | Pool;
 
 export interface PredictionRecord {
   id: string;
@@ -38,7 +40,7 @@ export interface PredictionRecordQuery {
 }
 
 export class PredictionRecordService {
-  constructor(private db: Connection) {}
+  constructor(private db: DBClient) {}
 
   /**
    * 创建预测记录

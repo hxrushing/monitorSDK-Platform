@@ -1,6 +1,6 @@
 import express from 'express';
 import cors from 'cors';
-import { createConnection } from 'mysql2/promise';
+import { createPool } from 'mysql2/promise';
 import { createApiRouter } from './routes/api';
 import { SchedulerService } from './services/schedulerService';
 import { SummaryService } from './services/summaryService';
@@ -17,16 +17,21 @@ async function main() {
   const port = process.env.PORT || 3000;
 
   try {
-    // 数据库连接配置
-    const db = await createConnection({
+    // 数据库连接池配置
+    const db = createPool({
       host: process.env.DB_HOST,
       port: parseInt(process.env.DB_PORT || '3306'),
       user: process.env.DB_USER,
       password: process.env.DB_PASSWORD,
       database: process.env.DB_NAME,
+      waitForConnections: true,
+      connectionLimit: parseInt(process.env.DB_POOL_LIMIT || '20'),
+      queueLimit: 0,
+      enableKeepAlive: true,
+      keepAliveInitialDelay: 0,
     });
 
-    console.log('数据库连接成功');
+    console.log('数据库连接池已创建');
 
     // 初始化服务
     const statsService = new StatsService(db);

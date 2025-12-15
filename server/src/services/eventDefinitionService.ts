@@ -1,6 +1,8 @@
-import { Connection } from 'mysql2/promise';
+import { Connection, Pool } from 'mysql2/promise';
 import { v4 as uuidv4 } from 'uuid';
 import { cacheManager } from '../utils/cache';
+
+type DBClient = Connection | Pool;
 
 export interface EventDefinition {
   id?: string;
@@ -29,7 +31,7 @@ export class EventDefinitionService {
     10 * 60 * 1000 // 10分钟过期（事件定义变化不频繁）
   );
 
-  constructor(private db: Connection) {}
+  constructor(private db: DBClient) {}
 
   /**
    * 清除项目的事件定义缓存

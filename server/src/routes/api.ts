@@ -8,10 +8,10 @@ import { SummaryService } from '../services/summaryService';
 import { PredictionService } from '../services/predictionService';
 import { PredictionRecordService } from '../services/predictionRecordService';
 import { cacheManager } from '../utils/cache';
-import { Connection } from 'mysql2/promise';
+import { Pool } from 'mysql2/promise';
 import { v4 as uuidv4 } from 'uuid';
 
-export function createApiRouter(db: Connection, summaryService?: SummaryService) {
+export function createApiRouter(db: Pool, summaryService?: SummaryService) {
   const router = express.Router();
   const statsService = new StatsService(db);
   const eventDefinitionService = new EventDefinitionService(db);
