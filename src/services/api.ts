@@ -188,15 +188,23 @@ export const apiService = {
     await api.put(`/users/${id}/role`, { role });
   },
 
-  async register(credentials: { username: string; password: string; email: string }) {
+  async register(credentials: { username: string; password: string; email: string }): Promise<{
+    success: boolean;
+    error?: string;
+  }> {
     const data = await api.post('/register', credentials);
-    return data;
+    return data as unknown as { success: boolean; error?: string };
   },
 
   // 用户登录
-  async login(credentials: { username: string; password: string }) {
+  async login(credentials: { username: string; password: string }): Promise<{
+    success: boolean;
+    user?: any;
+    token?: string;
+    error?: string;
+  }> {
     const data = await api.post('/login', credentials);
-    return data;
+    return data as unknown as { success: boolean; user?: any; token?: string; error?: string };
   },
 
   // AI总结设置

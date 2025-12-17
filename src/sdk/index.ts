@@ -1,12 +1,12 @@
 import { v4 as uuidv4 } from 'uuid';
 
-interface TrackEvent {
+export interface TrackEvent {
   eventName: string;
   eventParams?: Record<string, any>;
   timestamp: number;
 }
 
-interface CommonParams {
+export interface CommonParams {
   uid?: string;
   deviceInfo: {
     userAgent: string;
@@ -35,7 +35,7 @@ interface NetworkHistory {
 }
 
 // 自适应批量大小配置
-interface AdaptiveBatchConfig {
+export interface AdaptiveBatchConfig {
   enabled: boolean;             // 是否启用自适应批量大小
   minBatchSize: number;        // 最小批量大小（默认10）
   maxBatchSize: number;         // 最大批量大小（默认100）
@@ -47,7 +47,7 @@ interface AdaptiveBatchConfig {
 }
 
 // 指数退避配置接口
-interface ExponentialBackoffConfig {
+export interface ExponentialBackoffConfig {
   enabled: boolean;            // 是否启用指数退避（默认true）
   baseDelay: number;           // 基础延迟（毫秒，默认1000）
   maxDelay: number;            // 最大延迟（毫秒，默认30000）
@@ -59,10 +59,10 @@ interface ExponentialBackoffConfig {
 }
 
 // 错误类型枚举
-type ErrorType = 'network' | 'timeout' | 'server' | 'client' | 'unknown';
+export type ErrorType = 'network' | 'timeout' | 'server' | 'client' | 'unknown';
 
 // 重试记录接口
-interface RetryRecord {
+export interface RetryRecord {
   eventId: string;
   retryCount: number;
   lastRetryTime: number;
@@ -73,7 +73,7 @@ interface RetryRecord {
 }
 
 // 数据压缩配置接口
-interface CompressionConfig {
+export interface CompressionConfig {
   enabled: boolean;            // 是否启用压缩（默认true）
   algorithm: 'auto' | 'native' | 'custom' | 'none'; // 压缩算法
   minSize: number;            // 最小压缩大小（字节，小于此大小不压缩，默认100）
@@ -83,7 +83,7 @@ interface CompressionConfig {
 }
 
 // 压缩统计信息
-interface CompressionStats {
+export interface CompressionStats {
   originalSize: number;       // 原始大小（字节）
   compressedSize: number;     // 压缩后大小（字节）
   compressionRatio: number;   // 压缩比
@@ -93,7 +93,7 @@ interface CompressionStats {
 }
 
 // 批量发送配置接口
-interface BatchConfig {
+export interface BatchConfig {
   maxBatchSize: number;        // 最大批量大小（如果启用自适应，作为上限）
   flushInterval: number;        // 刷新间隔（毫秒）
   maxRetries: number;          // 最大重试次数
@@ -106,7 +106,7 @@ interface BatchConfig {
 }
 
 // 白屏检测配置接口
-interface BlankScreenConfig {
+export interface BlankScreenConfig {
   enabled: boolean;            // 是否启用白屏检测
   checkInterval: number;        // 检测间隔（毫秒），默认3000
   rootSelector: string;         // 根元素选择器，默认'#root'
@@ -1937,6 +1937,78 @@ class AnalyticsSDK {
       config: { ...this.blankScreenConfig }
     };
   }
+}
+
+// ===== 面向外部的轻量 API（阶段一：init / track* / flush） =====
+
+export interface InitOptions {
+  projectId: string;
+  endpoint: string;
+  /**
+   * 批量与传输相关配置（可选）
+   */
+  batchConfig?: Partial<BatchConfig>;
+  /**
+   * 白屏检测配置（可选）
+   */
+  blankScreenConfig?: Partial<BlankScreenConfig>;
+}
+
+export interface SDKInstance {
+  track: (eventName: string, eventParams?: Record<string, any>, priority?: 'high' | 'normal' | 'low') => void;
+  trackError: (errorType: string, errorDetails: Record<string, any>) => void;
+  trackPage: (path: string, extra?: Record<string, any>) => void;
+  trackHttp: (info: {
+    url: string;
+    method: string;
+    status?: number;
+    duration?: number;
+    requestSize?: number;
+    responseSize?: number;
+    extra?: Record<string, any>;
+  }) => void;
+  trackPerf: (metrics: Record<string, any>) => void;
+  flush: () => Promise<void>;
+  sendWithBeacon: (eventName: string, eventParams?: Record<string, any>) => boolean;
+}
+
+/**
+ * 初始化 SDK，返回面向业务方的轻量实例
+ * 对外暴露函数式 API，内部复用现有 AnalyticsSDK 实现
+ */
+export function init(options: InitOptions): SDKInstance {
+  const { projectId, endpoint, batchConfig, blankScreenConfig } = options;
+  const sdk = AnalyticsSDK.getInstance(projectId, endpoint, batchConfig, blankScreenConfig);
+
+  return {
+    track: (eventName, eventParams, priority) =>
+      sdk.track(eventName, eventParams, priority),
+
+    trackError: (errorType, errorDetails) =>
+      sdk.trackError(errorType, errorDetails),
+
+    trackPage: (path, extra) =>
+      sdk.track('page_view', { path, ...(extra || {}) }),
+
+    trackHttp: (info) =>
+      sdk.track('http', {
+        url: info.url,
+        method: info.method,
+        status: info.status,
+        duration: info.duration,
+        requestSize: info.requestSize,
+        responseSize: info.responseSize,
+        ...(info.extra || {}),
+      }),
+
+    trackPerf: (metrics) =>
+      sdk.track('perf', metrics),
+
+    flush: () => sdk.flush(),
+
+    sendWithBeacon: (eventName, eventParams) =>
+      sdk.sendWithBeacon(eventName, eventParams),
+  };
 }
 
 export default AnalyticsSDK; 

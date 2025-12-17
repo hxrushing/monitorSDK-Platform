@@ -1,5 +1,5 @@
 import React, { useState, useEffect, Suspense, useMemo, useCallback } from 'react';
-import { Card, Row, Col, DatePicker, Statistic, Spin, message, Table, Button, Space, Badge } from 'antd';
+import { Card, Row, Col, DatePicker, Spin, message, Table, Button, Space, Badge } from 'antd';
 const Line = React.lazy(() => import('@ant-design/plots').then(m => ({ default: m.Line })));
 import { 
   QuestionCircleOutlined, 

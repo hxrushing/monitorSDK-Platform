@@ -56,8 +56,8 @@ const PredictionHistory: React.FC = () => {
   const [pageSize, setPageSize] = useState(20);
   
   // 筛选条件
-  const [metricType, setMetricType] = useState<string>('');
-  const [modelType, setModelType] = useState<string>('');
+  const [metricType, setMetricType] = useState<PredictionRecord['metricType'] | ''>('');
+  const [modelType, setModelType] = useState<PredictionRecord['modelType'] | ''>('');
   const [dateRange, setDateRange] = useState<[dayjs.Dayjs, dayjs.Dayjs] | null>(null);
   
   // 查看详情
@@ -122,11 +122,11 @@ const PredictionHistory: React.FC = () => {
   }, []);
 
   // 筛选条件变化处理
-  const handleMetricTypeChange = useCallback((value: string) => {
+  const handleMetricTypeChange = useCallback((value: PredictionRecord['metricType'] | '') => {
     setMetricType(value);
   }, []);
 
-  const handleModelTypeChange = useCallback((value: string) => {
+  const handleModelTypeChange = useCallback((value: PredictionRecord['modelType'] | '') => {
     setModelType(value);
   }, []);
 

@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "build:sdk": "tsup",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
     "optimize-images": "node scripts/optimize-images.js"
@@ -43,6 +44,7 @@
     "sharp": "^0.34.5",
     "typescript": "^5.0.2",
     "vite": "^4.4.5",
-    "vite-plugin-remove-console": "^2.2.0"
+    "vite-plugin-remove-console": "^2.2.0",
+    "tsup": "^8.0.0"
   }
 }

@@ -4,13 +4,7 @@ import AnalyticsSDK from '@/sdk';
 /**
  * Web Vitals 性能指标类型
  */
-export interface PerformanceMetric extends Metric {
-  name: string;
-  value: number;
-  rating: 'good' | 'needs-improvement' | 'poor';
-  delta: number;
-  id: string;
-}
+export type PerformanceMetric = Metric;
 
 type ReportHandler = (metric: PerformanceMetric) => void;
 
@@ -178,8 +172,6 @@ export function getPerformanceSummary(): {
   overall: 'good' | 'needs-improvement' | 'poor';
 } {
   // 这个函数主要用于开发调试，实际指标通过 Web Vitals 回调获取
-  const navigation = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming;
-  
   return {
     metrics: [],
     overall: 'good'

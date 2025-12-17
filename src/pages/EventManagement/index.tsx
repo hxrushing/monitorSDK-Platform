@@ -46,6 +46,7 @@ const EventManagement: React.FC = () => {
       setLoading(true);
       const data = await apiService.getEventDefinitions(selectedProjectId);
       setDefinitions(data);
+      setTotal(data.length);
     } catch (error) {
       message.error('获取事件定义失败');
     } finally {
@@ -220,7 +221,7 @@ const EventManagement: React.FC = () => {
     setCurrentPage(page);
   };
 
-  const handlePageSizeChange = (page: number, size: number) => {
+  const handlePageSizeChange = (_page: number, size: number) => {
     setPageSize(size);
   };
 
@@ -254,7 +255,7 @@ const EventManagement: React.FC = () => {
           rowKey="id"
           loading={loading}
           pagination={{
-            total: total,
+            total,
             current: currentPage,
             pageSize: pageSize,
             onChange: handlePageChange,

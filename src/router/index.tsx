@@ -1,5 +1,5 @@
 // src/router/index.tsx
-import React, { Suspense, lazy } from 'react';
+import { Suspense, lazy } from 'react';
 import { createBrowserRouter, Navigate } from 'react-router-dom';
 import { RouteLoading } from '@/components/Loading';
 import RouteErrorBoundary from '@/components/RouteErrorBoundary';

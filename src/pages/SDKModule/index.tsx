@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Card, Button, Space, message, Typography, Divider, Alert, Row, Col, Tag } from 'antd';
+import { Card, Button, Space, message, Typography, Divider, Alert, Row, Col } from 'antd';
 import { BugOutlined, PlayCircleOutlined, WarningOutlined, InfoCircleOutlined, EyeOutlined } from '@ant-design/icons';
 import AnalyticsSDK from '@/sdk';
 import useGlobalStore from '@/store/globalStore';

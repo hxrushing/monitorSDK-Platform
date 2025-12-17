@@ -21,14 +21,6 @@ import { adaptiveChartSampling } from '@/utils/dataSampling';
 
 const { RangePicker } = DatePicker;
 
-interface PerformanceMetric {
-  指标名称: string;
-  指标值: number;
-  评级: string;
-  页面路径: string;
-  时间戳: number;
-}
-
 interface PerformanceData {
   date: string;
   metricName: string;

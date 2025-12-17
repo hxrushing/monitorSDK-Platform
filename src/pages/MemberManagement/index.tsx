@@ -6,7 +6,7 @@ import useGlobalStore from '@/store/globalStore';
 
 const MemberManagement: React.FC = () => {
   const userInfo = useGlobalStore(state => state.userInfo);
-  const isAdmin = userInfo?.role === 'Admin' || (userInfo && !('role' in userInfo) && userInfo.username === 'admin');
+  const isAdmin = userInfo?.role === 'Admin' || (userInfo && !('role' in userInfo) && (userInfo as any).username === 'admin');
 
   const [loading, setLoading] = useState(false);
   const [users, setUsers] = useState<UserItem[]>([]);

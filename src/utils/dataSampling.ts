@@ -270,7 +270,7 @@ export function smartChartSampling<T extends { [key: string]: any }>(
 
   // 对每个系列分别采样
   const sampledData: T[] = [];
-  seriesMap.forEach((seriesData, seriesValue) => {
+  seriesMap.forEach((seriesData) => {
     // 按时间排序
     const sortedData = [...seriesData].sort((a, b) => {
       const aTime = getNumericValue(a, xField);

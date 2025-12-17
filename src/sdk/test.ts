@@ -18,7 +18,6 @@ const testSdk = AnalyticsSDK.getInstance('test-project', 'http://localhost:3000/
 // 测试函数
 export class BatchSendTester {
   private sdk: AnalyticsSDK;
-  private testResults: any[] = [];
 
   constructor(sdk: AnalyticsSDK) {
     this.sdk = sdk;

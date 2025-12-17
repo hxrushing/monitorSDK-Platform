@@ -1,6 +1,5 @@
 import React, { memo } from 'react';
 import { Card, Statistic, Space, Badge } from 'antd';
-import type { StatisticProps } from 'antd';
 
 interface StatisticCardProps {
   title: string | React.ReactNode;

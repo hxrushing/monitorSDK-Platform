@@ -44,7 +44,8 @@ const Dashboard: React.FC<DashboardProps> = ({ projectId }) => {
   const chartData = stats.map(item => ({
     date: item.date,
     value: item.pv,
-    type: item.type || 'PV'
+    // 后端目前只返回 PV/UV 数值，这里统一视为 'PV' 维度
+    type: 'PV',
   }));
   
   // 使用LTTB算法进行智能采样，优化大数据量图表渲染性能
@@ -57,7 +58,7 @@ const Dashboard: React.FC<DashboardProps> = ({ projectId }) => {
     seriesField: 'type',
     smooth: true,
     animation: false,
-    renderer: 'canvas',
+    renderer: 'canvas' as 'canvas',
   };
 
   return (

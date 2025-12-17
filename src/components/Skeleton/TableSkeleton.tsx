@@ -1,5 +1,5 @@
 import React from 'react';
-import { Card, Skeleton, Table } from 'antd';
+import { Card, Skeleton } from 'antd';
 
 interface TableSkeletonProps {
   /** 表格列数 */
@@ -32,10 +32,14 @@ const TableSkeleton: React.FC<TableSkeletonProps> = ({
           style={{ marginBottom: 16 }}
         />
       )}
-      <Skeleton 
-        active 
-        paragraph={{ rows }}
-      />
+      {Array.from({ length: columns }).map((_, index) => (
+        <Skeleton
+          key={index}
+          active
+          paragraph={{ rows }}
+          style={index < columns - 1 ? { marginBottom: 12 } : undefined}
+        />
+      ))}
     </>
   );
 
