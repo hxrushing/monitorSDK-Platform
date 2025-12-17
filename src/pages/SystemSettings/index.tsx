@@ -1,7 +1,8 @@
 import React, { useMemo, useState } from 'react';
-import { Card, Form, Input, Button, Space, message, Segmented, ColorPicker, Select, Upload } from 'antd';
+import { Card, Form, Input, Button, Space, message, Segmented, Select, Upload, Tag } from 'antd';
 import { UploadOutlined } from '@ant-design/icons';
 import useGlobalStore from '@/store/globalStore';
+import { getThemePresetList, getThemePreset } from '@/utils/themePresets';
 
 const SystemSettings: React.FC = () => {
   const [form] = Form.useForm();
@@ -15,7 +16,7 @@ const SystemSettings: React.FC = () => {
     siteName: siteSettings.siteName,
     organizationName: siteSettings.organizationName,
     logoUrl: siteSettings.logoUrl,
-    primaryColor: siteSettings.primaryColor,
+    themePreset: siteSettings.themePreset,
     componentSize: siteSettings.componentSize,
     themeMode
   }), [siteSettings, themeMode]);
@@ -27,7 +28,7 @@ const SystemSettings: React.FC = () => {
         siteName: values.siteName,
         organizationName: values.organizationName,
         logoUrl: values.logoUrl,
-        primaryColor: typeof values.primaryColor === 'string' ? values.primaryColor : values.primaryColor.toHexString?.() || siteSettings.primaryColor,
+        themePreset: values.themePreset,
         componentSize: values.componentSize
       });
       setThemeMode(values.themeMode);
@@ -115,8 +116,33 @@ const SystemSettings: React.FC = () => {
               options={[{ label: '浅色', value: 'light' }, { label: '暗色', value: 'dark' }]}
             />
           </Form.Item>
-          <Form.Item name="primaryColor" label="主色">
-            <ColorPicker format="hex" />
+          <Form.Item 
+            name="themePreset" 
+            label="主题方案"
+            tooltip="选择预设的主题配色方案，将应用到整个项目"
+          >
+            <Select
+              placeholder="选择主题方案"
+              options={getThemePresetList().map(preset => ({
+                label: (
+                  <Space>
+                    <span>{preset.label}</span>
+                    <Tag 
+                      color={getThemePreset(preset.value).colors.primary}
+                      style={{ 
+                        width: 16, 
+                        height: 16, 
+                        padding: 0,
+                        borderRadius: '50%',
+                        border: '1px solid rgba(0,0,0,0.1)'
+                      }}
+                    />
+                  </Space>
+                ),
+                value: preset.value,
+                title: preset.description,
+              }))}
+            />
           </Form.Item>
           <Form.Item name="componentSize" label="组件尺寸">
             <Select

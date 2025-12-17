@@ -404,7 +404,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            background: themeMode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0,0,0,0.04)',
+            background: 'var(--primary-alpha-10)',
             borderRadius: '8px',
             padding: '4px',
             transition: 'all 0.3s',
@@ -464,8 +464,8 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
           style={{ 
             flexShrink: 0,
             padding: '12px 16px',
-            borderTop: `1px solid ${themeMode === 'dark' ? '#303030' : '#f0f0f0'}`,
-            background: themeMode === 'dark' ? '#141414' : '#fafafa',
+            borderTop: `1px solid var(--primary-alpha-10)`,
+            background: 'var(--app-bg)',
             position: 'sticky',
             bottom: 0,
             zIndex: 100,
@@ -480,7 +480,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
               onClick={() => setHelpDrawerVisible(true)}
               style={{ 
                 width: '100%',
-                color: themeMode === 'dark' ? '#fff' : '#666',
+                color: 'var(--sider-fg)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: collapsed ? 'center' : 'flex-start',

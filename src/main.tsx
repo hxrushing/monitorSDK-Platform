@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect } from 'react'
 import ReactDOM from 'react-dom/client'
 import { RouterProvider } from 'react-router-dom'
 import { ConfigProvider, App as AntdApp, theme as antdTheme } from 'antd'
@@ -10,6 +10,24 @@ import ErrorBoundary from '@/components/ErrorBoundary'
 import logo1 from '@/assets/logo1.jpg'
 import logo2 from '@/assets/logo2.jpg'
 import { initPerformanceMonitoring } from '@/utils/performance'
+import { applyThemePreset, getThemePreset } from '@/utils/themePresets'
+
+// 在 React 渲染之前立即应用主题，避免闪烁
+if (typeof document !== 'undefined') {
+  const storedThemeMode = localStorage.getItem('themeMode') === 'dark' ? 'dark' : 'light';
+  const storedSettings = localStorage.getItem('siteSettings');
+  let themePresetName = 'default-blue';
+  if (storedSettings) {
+    try {
+      const parsed = JSON.parse(storedSettings);
+      themePresetName = parsed.themePreset || 'default-blue';
+    } catch {
+      // 忽略解析错误
+    }
+  }
+  document.documentElement.setAttribute('data-theme', storedThemeMode);
+  applyThemePreset(themePresetName, storedThemeMode);
+}
 
 // 尽早预加载 LCP 图像（在 React 渲染之前）
 // 这样浏览器可以在解析 HTML 后立即开始加载图片
@@ -35,23 +53,47 @@ if (typeof document !== 'undefined') {
     preloadLink1.setAttribute('data-lcp', 'true');
     document.head.appendChild(preloadLink1);
   }
+
+  // 在 React 渲染之前立即应用主题，避免闪烁
+  const storedThemeMode = localStorage.getItem('themeMode') === 'dark' ? 'dark' : 'light';
+  const storedSettings = localStorage.getItem('siteSettings');
+  let themePresetName = 'default-blue';
+  if (storedSettings) {
+    try {
+      const parsed = JSON.parse(storedSettings);
+      themePresetName = parsed.themePreset || parsed.primaryColor ? 'default-blue' : 'default-blue';
+    } catch {
+      // 忽略解析错误
+    }
+  }
+  document.documentElement.setAttribute('data-theme', storedThemeMode);
 }
 
 const Root = () => {
   const themeMode = useGlobalStore(state => state.themeMode)
   const siteSettings = useGlobalStore(state => state.siteSettings)
 
+  // 获取当前主题预设
+  const themePreset = getThemePreset(siteSettings.themePreset)
+
   // 设置 HTML 属性，便于自定义样式选择
-  if (typeof document !== 'undefined') {
-    document.documentElement.setAttribute('data-theme', themeMode)
-  }
+  useEffect(() => {
+    if (typeof document !== 'undefined') {
+      document.documentElement.setAttribute('data-theme', themeMode)
+    }
+  }, [themeMode])
+
+  // 当主题预设或主题模式变化时，更新 CSS 变量
+  useEffect(() => {
+    applyThemePreset(siteSettings.themePreset, themeMode)
+  }, [siteSettings.themePreset, themeMode])
 
   return (
     <ConfigProvider
       locale={zhCN}
       theme={{
         algorithm: themeMode === 'dark' ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm,
-        token: { colorPrimary: siteSettings.primaryColor }
+        token: { colorPrimary: themePreset.colors.primary }
       }}
       componentSize={siteSettings.componentSize}
     >

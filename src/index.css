@@ -1,19 +1,29 @@
 :root[data-theme='light'] {
+  /* 主题变量由 JavaScript 动态设置，这里提供默认值作为后备 */
+  --primary-color: #1677ff;
   --app-bg: #f5f5f5;
   --app-text: rgba(0, 0, 0, 0.88);
-  --sider-bg: #e6f4ff; /* 浅蓝 */
+  --sider-bg: #e6f4ff;
   --sider-fg: #1d39c4;
   --sider-selected-bg: #bae0ff;
   --sider-selected-fg: #10239e;
+  --primary-alpha-10: rgba(22, 119, 255, 0.1);
+  --primary-alpha-20: rgba(22, 119, 255, 0.2);
+  --primary-alpha-30: rgba(22, 119, 255, 0.3);
 }
 
 :root[data-theme='dark'] {
+  /* 主题变量由 JavaScript 动态设置，这里提供默认值作为后备 */
+  --primary-color: #1677ff;
   --app-bg: #141414;
   --app-text: rgba(255, 255, 255, 0.85);
-  --sider-bg: #0b1f3a; /* 深蓝调 */
+  --sider-bg: #0b1f3a;
   --sider-fg: rgba(255, 255, 255, 0.85);
   --sider-selected-bg: #102a44;
   --sider-selected-fg: #e6f4ff;
+  --primary-alpha-10: rgba(22, 119, 255, 0.1);
+  --primary-alpha-20: rgba(22, 119, 255, 0.2);
+  --primary-alpha-30: rgba(22, 119, 255, 0.3);
 }
 
 html, body, #root {

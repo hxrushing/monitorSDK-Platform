@@ -18,7 +18,7 @@ interface GlobalState {
     siteName: string
     organizationName: string
     logoUrl: string
-    primaryColor: string
+    themePreset: string
     componentSize: 'small' | 'middle' | 'large'
   }
   setSiteSettings: (settings: Partial<GlobalState['siteSettings']>) => void
@@ -49,11 +49,17 @@ const getInitialSiteSettings = () => {
   if (raw) {
     try {
       const parsed = JSON.parse(raw);
+      // 兼容旧版本：如果有 primaryColor，转换为 themePreset
+      let themePreset = parsed.themePreset ?? 'default-blue';
+      if (parsed.primaryColor && !parsed.themePreset) {
+        // 根据旧的主色值尝试匹配预设，否则使用默认
+        themePreset = 'default-blue';
+      }
       return {
         siteName: parsed.siteName ?? '埋点分析平台',
         organizationName: parsed.organizationName ?? 'Demo Org',
         logoUrl: parsed.logoUrl ?? '',
-        primaryColor: parsed.primaryColor ?? '#1677ff',
+        themePreset,
         componentSize: parsed.componentSize ?? 'middle'
       } as GlobalState['siteSettings'];
     } catch {
@@ -64,7 +70,7 @@ const getInitialSiteSettings = () => {
     siteName: '埋点分析平台',
     organizationName: 'Demo Org',
     logoUrl: '',
-    primaryColor: '#1677ff',
+    themePreset: 'default-blue',
     componentSize: 'middle'
   } as GlobalState['siteSettings'];
 };
