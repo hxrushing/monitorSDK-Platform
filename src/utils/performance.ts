@@ -27,7 +27,8 @@ function getSDKInstance(): AnalyticsSDK | null {
       return null;
     }
 
-    const endpoint = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api') + '/track';
+    // 直接使用相对路径 /api
+    const endpoint = '/api/track';
     return AnalyticsSDK.getInstance(projectId, endpoint);
   } catch (error) {
     console.warn('[Performance] SDK 未初始化，性能数据将仅输出到控制台');

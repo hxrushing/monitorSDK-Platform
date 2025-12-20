@@ -1,6 +1,17 @@
 import OpenAI from 'openai';
 import { encoding_for_model, get_encoding, type Tiktoken } from 'tiktoken';
 
+// Node.js 16 需要 fetch polyfill
+let fetchPolyfill: any = null;
+if (typeof globalThis.fetch === 'undefined') {
+  try {
+    fetchPolyfill = require('node-fetch');
+    globalThis.fetch = fetchPolyfill.default || fetchPolyfill;
+  } catch (e) {
+    console.warn('[AIService] node-fetch not found, OpenAI may not work');
+  }
+}
+
 export interface SummaryData {
   projectId: string;
   projectName: string;
@@ -39,11 +50,20 @@ export class AIService {
     const timeoutMs = parseInt(process.env.OPENAI_TIMEOUT_MS || '120000'); // 增加默认超时时间到120秒
 
     if (apiKey) {
-      this.client = new OpenAI({
+      const clientConfig: any = {
         apiKey: apiKey,
         baseURL,
         timeout: timeoutMs,
-      } as any);
+      };
+      
+      // Node.js 16 需要传递 fetch
+      if (fetchPolyfill) {
+        clientConfig.fetch = fetchPolyfill.default || fetchPolyfill;
+      } else if (typeof globalThis.fetch !== 'undefined') {
+        clientConfig.fetch = globalThis.fetch;
+      }
+      
+      this.client = new OpenAI(clientConfig);
 
       console.log('[AIService] OpenAI 客户端初始化', {
         baseURL: baseURL || 'default',

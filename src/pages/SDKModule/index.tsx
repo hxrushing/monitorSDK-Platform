@@ -33,9 +33,10 @@ const SDKModule: React.FC = () => {
     // 清空事件日志
     setEventLog([]);
     
+    // 直接使用相对路径 /api
     const sdkInstance = AnalyticsSDK.getInstance(
       selectedProjectId,
-      (import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api') + '/track'
+      '/api/track'
     );
     sdkInstance.setUser('user-123');
     setSdk(sdkInstance);

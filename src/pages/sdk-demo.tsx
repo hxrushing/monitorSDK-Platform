@@ -86,19 +86,21 @@ const SDKDemo: React.FC = () => {
     // 清理之前的SDK实例
     AnalyticsSDK.clearAllInstances();
     
+    // 直接使用相对路径 /api
     const sdk = AnalyticsSDK.getInstance(
       selectedProjectId,
-      (import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api') + '/track'
+      '/api/track'
     );
     sdk.setUser('user-123');
     sdk.track('页面浏览', { 路径: location.pathname, 项目ID: selectedProjectId });
   }, [selectedProjectId]);
 
-  const withSDK = () =>
-    AnalyticsSDK.getInstance(
+  const withSDK = () => {
+    return AnalyticsSDK.getInstance(
       selectedProjectId,
-      (import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api') + '/track'
+      '/api/track'
     );
+  };
 
   const handlePrimary = () => {
     const sdk = withSDK();

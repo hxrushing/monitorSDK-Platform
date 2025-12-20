@@ -148,17 +148,8 @@ const AISummarySettings: React.FC = () => {
     }
 
     // 构建 SSE URL（EventSource 不支持自定义 headers，所以通过 URL 参数传递 token）
-    // 获取 API base URL（从 http 工具或环境变量）
-    const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api';
-    
-    // 构建完整的 URL
-    // 如果 apiBaseUrl 已经包含 /api，直接使用；否则添加 /api
-    let baseUrl = apiBaseUrl;
-    if (!baseUrl.endsWith('/api')) {
-      // 移除末尾的斜杠（如果有）
-      baseUrl = baseUrl.replace(/\/$/, '');
-      baseUrl = baseUrl + '/api';
-    }
+    // 直接使用相对路径 /api
+    const baseUrl = '/api';
     
     const url = `${baseUrl}/ai-summary/progress/${taskId}/stream?token=${encodeURIComponent(token)}`;
     

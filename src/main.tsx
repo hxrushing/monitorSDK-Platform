@@ -53,20 +53,6 @@ if (typeof document !== 'undefined') {
     preloadLink1.setAttribute('data-lcp', 'true');
     document.head.appendChild(preloadLink1);
   }
-
-  // 在 React 渲染之前立即应用主题，避免闪烁
-  const storedThemeMode = localStorage.getItem('themeMode') === 'dark' ? 'dark' : 'light';
-  const storedSettings = localStorage.getItem('siteSettings');
-  let themePresetName = 'default-blue';
-  if (storedSettings) {
-    try {
-      const parsed = JSON.parse(storedSettings);
-      themePresetName = parsed.themePreset || parsed.primaryColor ? 'default-blue' : 'default-blue';
-    } catch {
-      // 忽略解析错误
-    }
-  }
-  document.documentElement.setAttribute('data-theme', storedThemeMode);
 }
 
 const Root = () => {

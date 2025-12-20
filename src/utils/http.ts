@@ -8,8 +8,9 @@ const BASE_DELAY = 500 // ms，指数退避基准
 // 简单延迟方法
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
+// 直接使用相对路径 /api，通过 Nginx 反向代理
 const instance = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api',
+  baseURL: '/api',
   timeout: 30000  // 增加到30秒，支持大数据量查询
 })
 

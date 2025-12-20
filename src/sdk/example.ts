@@ -3,10 +3,10 @@
 import AnalyticsSDK from './index';
 
 // 1. 基本使用 - 使用默认配置
-const sdk = AnalyticsSDK.getInstance('your-project-id', 'http://localhost:3000/api/track');
+const sdk = AnalyticsSDK.getInstance('your-project-id', '/api/track');
 
 // 2. 自定义配置使用
-const customSdk = AnalyticsSDK.getInstance('your-project-id', 'http://localhost:3000/api/track', {
+const customSdk = AnalyticsSDK.getInstance('your-project-id', '/api/track', {
   maxBatchSize: 20,        // 最大批量20个事件
   flushInterval: 3000,      // 3秒刷新一次
   maxRetries: 5,           // 最大重试5次

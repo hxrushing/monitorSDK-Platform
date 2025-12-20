@@ -1,3 +1,12 @@
+// Node.js 16 需要 fetch polyfill
+if (typeof globalThis.fetch === 'undefined') {
+  const { default: fetch } = require('node-fetch');
+  globalThis.fetch = fetch;
+  globalThis.Headers = require('node-fetch').Headers;
+  globalThis.Request = require('node-fetch').Request;
+  globalThis.Response = require('node-fetch').Response;
+}
+
 import express from 'express';
 import cors from 'cors';
 import { createPool } from 'mysql2/promise';
@@ -10,9 +19,20 @@ import { EmailService } from './services/emailService';
 import dotenv from 'dotenv';
 import swaggerUi from 'swagger-ui-express';
 import { swaggerSpec } from './swagger';
+import path from 'path';
 
-// 加载环境变量
-dotenv.config();
+// 加载环境变量 - 明确指定 .env 文件路径
+const envPath = path.resolve(__dirname, '../.env');
+dotenv.config({ path: envPath });
+
+// 调试：输出数据库配置（不输出密码）
+console.log('环境变量加载信息:');
+console.log(`  .env 文件路径: ${envPath}`);
+console.log(`  当前工作目录: ${process.cwd()}`);
+console.log(`  DB_HOST: ${process.env.DB_HOST || '未设置'}`);
+console.log(`  DB_PORT: ${process.env.DB_PORT || '3306'}`);
+console.log(`  DB_USER: ${process.env.DB_USER || '未设置'}`);
+console.log(`  DB_NAME: ${process.env.DB_NAME || '未设置'}`);
 
 async function main() {
   const app = express();
@@ -20,7 +40,7 @@ async function main() {
 
   try {
     // 数据库连接池配置
-    const db = createPool({
+    const dbConfig = {
       host: process.env.DB_HOST,
       port: parseInt(process.env.DB_PORT || '3306'),
       user: process.env.DB_USER,
@@ -31,8 +51,16 @@ async function main() {
       queueLimit: 0,
       enableKeepAlive: true,
       keepAliveInitialDelay: 0,
-    });
+    };
 
+    // 调试：输出数据库配置（不输出密码）
+    console.log('数据库连接池配置:');
+    console.log(`  host: ${dbConfig.host}`);
+    console.log(`  port: ${dbConfig.port}`);
+    console.log(`  user: ${dbConfig.user}`);
+    console.log(`  database: ${dbConfig.database}`);
+
+    const db = createPool(dbConfig);
     console.log('数据库连接池已创建');
 
     // 初始化服务
