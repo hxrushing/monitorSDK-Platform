@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
+import dataSamplingWorker from '@/workers/dataSampling.worker?worker';
 
 export interface WorkerMessage<T = any> {
   type: string;
@@ -62,7 +63,7 @@ export interface UseWorkerOptions {
  * ```
  */
 export function useWorker<T = any, R = any>(
-  workerPath: string | URL,
+  workerPath: string | URL | (new () => Worker),
   onMessage?: (result: R, response: WorkerResponse<R>) => void,
   options: UseWorkerOptions = {}
 ): {
@@ -79,20 +80,26 @@ export function useWorker<T = any, R = any>(
   useEffect(() => {
     try {
       // 创建 Worker
-      // Vite 中需要使用 ?worker 后缀或 new URL 方式
-      let workerUrl: string | URL;
-      if (workerPath instanceof URL) {
-        workerUrl = workerPath;
-      } else if (typeof workerPath === 'string') {
-        // 如果是字符串路径，转换为 URL
-        workerUrl = new URL(workerPath, import.meta.url);
+      // Vite 中支持 ?worker 后缀（返回 Worker 构造函数）或 new URL 方式
+      if (typeof workerPath === 'function') {
+        // Worker 构造函数（通过 ?worker 导入）
+        workerRef.current = new workerPath();
       } else {
-        throw new Error('Invalid worker path');
+        // URL 或字符串路径
+        let workerUrl: string | URL;
+        if (workerPath instanceof URL) {
+          workerUrl = workerPath;
+        } else if (typeof workerPath === 'string') {
+          // 如果是字符串路径，转换为 URL
+          workerUrl = new URL(workerPath, import.meta.url);
+        } else {
+          throw new Error('Invalid worker path');
+        }
+        
+        workerRef.current = new Worker(workerUrl, {
+          type: 'module'
+        });
       }
-      
-      workerRef.current = new Worker(workerUrl, {
-        type: 'module'
-      });
 
       // 监听 Worker 消息
       workerRef.current.onmessage = (event: MessageEvent<WorkerResponse<R>>) => {
@@ -128,7 +135,7 @@ export function useWorker<T = any, R = any>(
       }
 
       if (import.meta.env.DEV) {
-        console.log('[Worker] Worker 已初始化:', workerUrl);
+        console.log('[Worker] Worker 已初始化:', typeof workerPath === 'function' ? 'Worker Constructor' : workerPath);
       }
     } catch (error) {
       console.error('[Worker] 初始化失败:', error);
@@ -195,7 +202,7 @@ export function useDataSamplingWorker<R = any>(
   options: UseWorkerOptions = {}
 ) {
   return useWorker(
-    new URL('../workers/dataSampling.worker.ts', import.meta.url),
+    dataSamplingWorker,
     (result, response) => {
       if (import.meta.env.DEV && response.originalLength && response.sampledLength) {
         console.log(
