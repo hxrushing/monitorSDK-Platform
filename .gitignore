@@ -32,3 +32,6 @@ server/.env
 server/.env.local
 server/.env.prod
 src/docs
+
+# RSA 密钥文件（敏感信息，不应提交到版本控制）
+server/keys/

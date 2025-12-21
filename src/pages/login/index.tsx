@@ -3,6 +3,7 @@ import { Form, Input, Button, Card, message } from 'antd';
 import { UserOutlined, LockOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { apiService } from '@/services/api';
+import { encryptPassword } from '@/utils/crypto';
 import useGlobalStore from '@/store/globalStore';
 import './index.less';
 
@@ -14,7 +15,15 @@ const Login: React.FC = () => {
   const onFinish = async (values: { username: string; password: string }) => {
     try {
       setLoading(true);
-      const response = await apiService.login(values);
+      
+      // 加密密码
+      const encryptedPassword = await encryptPassword(values.password);
+      
+      // 发送加密后的凭证
+      const response = await apiService.login({
+        username: values.username,
+        password: encryptedPassword
+      });
       
       if (response.success && response.user) {
         if (response.token) {

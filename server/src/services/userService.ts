@@ -1,6 +1,6 @@
 import { Connection, Pool } from 'mysql2/promise';
-import crypto from 'crypto';
 import { v4 as uuidv4 } from 'uuid';
+import { hashPassword, verifyPassword } from '../utils/crypto';
 
 export interface User {
   id: string;
@@ -61,7 +61,7 @@ export class UserService {
       const userId = uuidv4();
       await this.db.execute(
         'INSERT INTO users (id, username, password, email, role) VALUES (?, ?, ?, ?, ?)',
-        [userId, username, this.hashPassword(password), email, 'User']
+        [userId, username, hashPassword(password), email, 'User']
       );
 
       return {
@@ -79,20 +79,25 @@ export class UserService {
   // 用户登录
   async login(username: string, password: string): Promise<LoginResponse> {
     try {
+      // 先查找用户（不验证密码，因为密码哈希格式可能不同）
       const [rows] = await this.db.execute(
-        'SELECT * FROM users WHERE username = ? AND password = ?',
-        [username, this.hashPassword(password)]
+        'SELECT * FROM users WHERE username = ?',
+        [username]
       );
       
       if (Array.isArray(rows) && rows.length > 0) {
         const user = rows[0] as User;
-        // 返回用户信息（不包含密码）
-        const { password: _, ...userWithoutPassword } = user;
         
-        return {
-          success: true,
-          user: userWithoutPassword
-        };
+        // 验证密码（支持新旧格式）
+        if (verifyPassword(password, user.password)) {
+          // 返回用户信息（不包含密码）
+          const { password: _, ...userWithoutPassword } = user;
+          
+          return {
+            success: true,
+            user: userWithoutPassword
+          };
+        }
       }
       
       return {
@@ -112,11 +117,16 @@ export class UserService {
   async validateUser(username: string, password: string): Promise<boolean> {
     try {
       const [rows] = await this.db.execute(
-        'SELECT * FROM users WHERE username = ? AND password = ?',
-        [username, this.hashPassword(password)]
+        'SELECT * FROM users WHERE username = ?',
+        [username]
       );
       
-      return Array.isArray(rows) && rows.length > 0;
+      if (Array.isArray(rows) && rows.length > 0) {
+        const user = rows[0] as User;
+        return verifyPassword(password, user.password);
+      }
+      
+      return false;
     } catch (err) {
       console.error('验证用户失败:', err);
       return false;
@@ -141,8 +151,4 @@ export class UserService {
     }
   }
 
-  // 密码加密
-  private hashPassword(password: string): string {
-    return crypto.createHash('md5').update(password).digest('hex');
-  }
 } 

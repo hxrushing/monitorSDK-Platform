@@ -8,6 +8,7 @@ import { SummaryService } from '../services/summaryService';
 import { PredictionService } from '../services/predictionService';
 import { PredictionRecordService } from '../services/predictionRecordService';
 import { cacheManager } from '../utils/cache';
+import { getRSAPublicKey, decryptRSA } from '../utils/crypto';
 import { Pool } from 'mysql2/promise';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -39,8 +40,49 @@ export function createApiRouter(db: Pool, summaryService?: SummaryService) {
     }
   };
 
-  // 用户登录（公开）
-  router.post('/login', async (req, res) => {
+  // 密码解密中间件（用于登录和注册接口）
+  const decryptPasswordMiddleware: express.RequestHandler = (req, res, next) => {
+    try {
+      if (req.body.password && typeof req.body.password === 'string') {
+        // 尝试解密（如果加密了）
+        // 如果解密失败，可能是旧版本客户端发送的明文，保持兼容
+        try {
+          req.body.password = decryptRSA(req.body.password);
+        } catch (error) {
+          // 解密失败，可能是明文或格式错误
+          // 为了兼容性，暂时允许明文（生产环境应该强制加密）
+          console.warn('[Auth] 密码未加密，建议使用加密传输');
+        }
+      }
+      next();
+    } catch (error) {
+      console.error('[Auth] 密码解密中间件错误:', error);
+      return res.status(400).json({
+        success: false,
+        error: '密码格式错误'
+      });
+    }
+  };
+
+  // 获取 RSA 公钥（公开接口）
+  router.get('/public-key', (req, res) => {
+    try {
+      const publicKey = getRSAPublicKey();
+      res.json({
+        success: true,
+        publicKey: publicKey
+      });
+    } catch (error) {
+      console.error('获取公钥失败:', error);
+      res.status(500).json({
+        success: false,
+        error: '获取公钥失败'
+      });
+    }
+  });
+
+  // 用户登录（公开，使用密码解密中间件）
+  router.post('/login', decryptPasswordMiddleware, async (req, res) => {
     try {
       const { username, password } = req.body;
       
@@ -68,8 +110,8 @@ export function createApiRouter(db: Pool, summaryService?: SummaryService) {
     }
   });
 
-  // 用户注册（公开）
-  router.post('/register', async (req, res) => {
+  // 用户注册（公开，使用密码解密中间件）
+  router.post('/register', decryptPasswordMiddleware, async (req, res) => {
     try {
       const { username, password, email } = req.body;
       
