@@ -4,16 +4,19 @@ import { cacheManager } from '../utils/cache';
 
 interface EventData {
   projectId: string;
-  eventName: string;
-  eventParams: Record<string, any>;
+  eventName?: string;  // 旧格式
+  eventType?: string;  // 新格式
+  eventParams?: Record<string, any>;  // 旧格式
+  payload?: Record<string, any>;  // 新格式
   uid?: string;
-  deviceInfo: {
+  deviceInfo?: {
     userAgent: string;
     platform: string;
     language: string;
     screenResolution: string;
   };
-  timestamp: number;
+  timestamp?: number;  // 旧格式
+  ts?: number;  // 新格式
 }
 
 type DBClient = Connection | Pool;
@@ -88,21 +91,31 @@ export class TrackingService {
       try {
         for (const eventData of batchData.events) {
           try {
+            // 支持新旧两种格式
+            const eventName = eventData.eventType || eventData.eventName;
+            const eventParams = eventData.payload || eventData.eventParams || {};
+            const timestamp = eventData.ts || eventData.timestamp || Date.now();
+            const deviceInfo = batchData.deviceInfo || eventData.deviceInfo || {};
+            
+            if (!eventName) {
+              throw new Error('Missing required field: eventType or eventName');
+            }
+
             // 检查事件定义是否存在
-            const exists = await this.validateEventDefinition(batchData.projectId, eventData.eventName);
+            const exists = await this.validateEventDefinition(batchData.projectId, eventName);
             
             if (!exists) {
-              await this.createEventDefinition(batchData.projectId, eventData.eventName);
+              await this.createEventDefinition(batchData.projectId, eventName);
             }
 
             // 准备插入数据
             const params = [
               batchData.projectId,
-              eventData.eventName,
-              JSON.stringify(eventData.eventParams || {}),
-              batchData.uid || null,
-              JSON.stringify(batchData.deviceInfo || {}),
-              new Date(eventData.timestamp || Date.now()).toISOString().slice(0, 19).replace('T', ' ')
+              eventName,
+              JSON.stringify(eventParams),
+              batchData.uid || eventData.uid || null,
+              JSON.stringify(deviceInfo),
+              new Date(timestamp).toISOString().slice(0, 19).replace('T', ' ')
             ];
 
             // 插入事件数据
@@ -154,28 +167,33 @@ export class TrackingService {
     try {
       console.log('开始处理事件追踪:', eventData);
 
+      // 支持新旧两种格式
+      const eventName = eventData.eventType || eventData.eventName;
+      const eventParams = eventData.payload || eventData.eventParams || {};
+      const timestamp = eventData.ts || eventData.timestamp || Date.now();
+
       // 检查必要字段
-      if (!eventData.projectId || !eventData.eventName) {
-        throw new Error('Missing required fields: projectId or eventName');
+      if (!eventData.projectId || !eventName) {
+        throw new Error('Missing required fields: projectId and (eventType or eventName)');
       }
 
       // 检查事件定义是否存在，如果不存在则自动创建
       console.log('验证事件定义...');
-      const exists = await this.validateEventDefinition(eventData.projectId, eventData.eventName);
+      const exists = await this.validateEventDefinition(eventData.projectId, eventName);
       
       if (!exists) {
         console.log('事件定义不存在，正在创建...');
-        await this.createEventDefinition(eventData.projectId, eventData.eventName);
+        await this.createEventDefinition(eventData.projectId, eventName);
       }
 
       // 准备插入数据
       const params = [
         eventData.projectId,
-        eventData.eventName,
-        JSON.stringify(eventData.eventParams || {}),
+        eventName,
+        JSON.stringify(eventParams),
         eventData.uid || null,
         JSON.stringify(eventData.deviceInfo || {}),
-        new Date(eventData.timestamp || Date.now()).toISOString().slice(0, 19).replace('T', ' ')
+        new Date(timestamp).toISOString().slice(0, 19).replace('T', ' ')
       ];
 
       console.log('插入事件数据:', params);

@@ -9,7 +9,6 @@ import {
   UserOutlined,
   QuestionCircleOutlined,
   BugOutlined,
-  CodeOutlined,
   RobotOutlined,
   HistoryOutlined,
   ThunderboltOutlined
@@ -127,8 +126,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
     '/app/member-management': 'group-management',
     '/app/settings': 'group-system',
     '/app/ai-summary': 'group-system',
-    '/app/sdk-demo': 'group-example',
-    '/app/sdk-module': 'group-example'
+    '/app/pluggable-sdk-test': 'group-example'
   };
 
   const menuItems = [
@@ -205,14 +203,9 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
       label: '示例',
       children: [
         {
-          key: '/app/sdk-demo',
-          icon: <CodeOutlined />,
-          label: 'SDK 模板'
-        },
-        {
-          key: '/app/sdk-module',
+          key: '/app/sdk-test',
           icon: <BugOutlined />,
-          label: 'SDK 模块'
+          label: '可插拔SDK测试'
         }
       ]
     },

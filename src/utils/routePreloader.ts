@@ -11,8 +11,6 @@ const routeImportMap: Record<string, () => Promise<any>> = {
   'performance': () => import('@/pages/PerformanceAnalysis'),
   'event-management': () => import('@/pages/EventManagement'),
   'member-management': () => import('@/pages/MemberManagement'),
-  'sdk-demo': () => import('@/pages/sdk-demo'),
-  'sdk-module': () => import('@/pages/SDKModule'),
   'settings': () => import('@/pages/SystemSettings'),
   'ai-summary': () => import('@/pages/AISummarySettings'),
   'prediction': () => import('@/pages/Prediction'),

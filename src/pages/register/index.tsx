@@ -3,6 +3,7 @@ import { Form, Input, Button, Card, message } from 'antd';
 import { UserOutlined, LockOutlined, MailOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { apiService } from '@/services/api';
+import { encryptPassword } from '@/utils/crypto';
 import './index.less';
 
 const Register: React.FC = () => {
@@ -12,7 +13,16 @@ const Register: React.FC = () => {
   const onFinish = async (values: { username: string; password: string; email: string }) => {
     try {
       setLoading(true);
-      const response = await apiService.register(values);
+      
+      // 加密密码
+      const encryptedPassword = await encryptPassword(values.password);
+      
+      // 发送加密后的凭证
+      const response = await apiService.register({
+        username: values.username,
+        password: encryptedPassword,
+        email: values.email
+      });
       
       if (response.success) {
         message.success('注册成功，请登录');

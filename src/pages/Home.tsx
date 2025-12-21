@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { Layout, Menu, Select } from 'antd';
 import Dashboard from '../components/Dashboard';
 import EventDefinitionManager from '../components/EventDefinitionManager';
-import { Link } from 'react-router-dom';
 
 const { Header, Content } = Layout;
 
@@ -55,9 +54,6 @@ const Home: React.FC = () => {
       <Content style={{ padding: '24px' }}>
         <div style={{ background: '#fff', padding: 24, minHeight: 280 }}>
           {renderContent()}
-        </div>
-        <div style={{ marginTop: 16 }}>
-          <Link to="/sdk-demo">前往 SDK 示例页</Link>
         </div>
       </Content>
     </Layout>

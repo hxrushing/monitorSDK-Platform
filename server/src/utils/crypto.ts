@@ -171,3 +171,6 @@ export function isLegacyMD5Hash(hashedPassword: string): boolean {
   return !hashedPassword.includes(':') && hashedPassword.length === 32;
 }
 
+
+
+

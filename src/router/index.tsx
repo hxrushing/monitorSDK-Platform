@@ -12,14 +12,13 @@ const EventManagement = lazy(() => import('@/pages/EventManagement'));
 const Login = lazy(() => import('@/pages/login'));
 const Register = lazy(() => import('@/pages/register'));
 const App = lazy(() => import('@/App'));
-const SDKDemo = lazy(() => import('@/pages/sdk-demo'));
-const SDKModule = lazy(() => import('@/pages/SDKModule'));
 const MemberManagement = lazy(() => import('@/pages/MemberManagement'));
 const SystemSettings = lazy(() => import('@/pages/SystemSettings'));
 const AISummarySettings = lazy(() => import('@/pages/AISummarySettings'));
 const Prediction = lazy(() => import('@/pages/Prediction'));
 const PredictionHistory = lazy(() => import('@/pages/PredictionHistory'));
 const PerformanceAnalysis = lazy(() => import('@/pages/PerformanceAnalysis'));
+const SDKTest = lazy(() => import('@/pages/SDKTest'));
 
 const isAuthed = () => !!localStorage.getItem('token') || !!localStorage.getItem('userInfo');
 
@@ -85,16 +84,6 @@ const router = createBrowserRouter([
         errorElement: <RouteErrorBoundary />,
       },
       {
-        path: 'sdk-demo',
-        element: withSuspense(<SDKDemo />),
-        errorElement: <RouteErrorBoundary />,
-      },
-      {
-        path: 'sdk-module',
-        element: withSuspense(<SDKModule />),
-        errorElement: <RouteErrorBoundary />,
-      },
-      {
         path: 'settings',
         element: withSuspense(<SystemSettings />),
         errorElement: <RouteErrorBoundary />,
@@ -112,6 +101,11 @@ const router = createBrowserRouter([
       {
         path: 'prediction/history',
         element: withSuspense(<PredictionHistory />),
+        errorElement: <RouteErrorBoundary />,
+      },
+      {
+        path: 'sdk-test',
+        element: withSuspense(<SDKTest />),
         errorElement: <RouteErrorBoundary />,
       },
     ],
