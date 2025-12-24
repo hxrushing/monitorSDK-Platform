@@ -779,6 +779,30 @@ export function createApiRouter(db: Pool, summaryService?: SummaryService) {
     }
   });
 
+  // 获取单个项目详情
+  router.get('/projects/:projectId', createProjectPermissionMiddleware('params'), async (req, res) => {
+    try {
+      const { projectId } = req.params;
+
+      const [rows] = await db.execute(
+        'SELECT * FROM projects WHERE id = ?',
+        [projectId]
+      ) as any[];
+
+      if (Array.isArray(rows) && rows.length === 0) {
+        return res.status(404).json({ 
+          success: false, 
+          error: '项目不存在' 
+        });
+      }
+
+      res.json({ success: true, data: rows[0] });
+    } catch (error) {
+      console.error('Error getting project detail:', error);
+      res.status(500).json({ success: false, error: 'Internal Server Error' });
+    }
+  });
+
   // 获取Top 5访问项目数据
   router.get('/top-projects', createProjectPermissionMiddleware('query'), async (req, res) => {
     try {

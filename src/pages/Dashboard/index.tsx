@@ -8,9 +8,11 @@ import {
   FileTextOutlined, 
   ClockCircleOutlined,
   LineChartOutlined,
-  TrophyOutlined
+  TrophyOutlined,
+  BookOutlined
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
+import { useNavigate } from 'react-router-dom';
 import { apiService } from '@/services/api';
 import type { TopProject } from '@/services/api';
 import FloatingPanel from '@/components/FloatingPanel';
@@ -24,6 +26,8 @@ import { useDataSamplingWorker } from '@/hooks/useWorker';
 const { RangePicker } = DatePicker;
 
 const Dashboard: React.FC = () => {
+  const navigate = useNavigate();
+  
   // 默认显示最近30天，确保包含今天的数据
   const [dateRange, setDateRange] = useState<[dayjs.Dayjs, dayjs.Dayjs]>([
     dayjs().subtract(7, 'day').startOf('day'), // 30天前（包含今天共30天）
@@ -304,6 +308,15 @@ const Dashboard: React.FC = () => {
                 return current && current > dayjs().endOf('day');
               }}
             />
+            {selectedProjectId && (
+              <Button
+                type="primary"
+                icon={<BookOutlined />}
+                onClick={() => navigate(`/app/integration/${selectedProjectId}`)}
+              >
+                接入指引
+              </Button>
+            )}
             <Button
               type="text"
               icon={<QuestionCircleOutlined />}

@@ -11,7 +11,8 @@ import {
   BugOutlined,
   RobotOutlined,
   HistoryOutlined,
-  ThunderboltOutlined
+  ThunderboltOutlined,
+  BookOutlined
 } from '@ant-design/icons';
 import { Layout, Menu, Button, theme, Select, Modal, Form, Input, message, Dropdown, Space, Switch, Tooltip, Drawer, Typography, Divider } from 'antd';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -124,10 +125,14 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
     '/app/prediction/history': 'group-prediction',
     '/app/event-management': 'group-management',
     '/app/member-management': 'group-management',
+    '/app/integration': 'group-management',
     '/app/settings': 'group-system',
     '/app/ai-summary': 'group-system',
     '/app/pluggable-sdk-test': 'group-example'
   };
+
+  // 检查当前路径是否为接入指引页
+  const isIntegrationPage = location.pathname.startsWith('/app/integration/');
 
   const menuItems = [
     {
@@ -195,6 +200,12 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
             </Tooltip>
           ),
           disabled: !isAdmin
+        },
+        {
+          key: selectedProjectId ? `/app/integration/${selectedProjectId}` : '/app/integration',
+          icon: <BookOutlined />,
+          label: '接入指引',
+          disabled: !selectedProjectId
         }
       ]
     },
@@ -254,6 +265,11 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
       message.warning('当前功能需要管理员权限，请联系管理员');
       return;
     }
+    // 如果是接入指引且没有 projectId，提示用户先选择项目
+    if (key.includes('/integration') && !selectedProjectId) {
+      message.warning('请先选择项目');
+      return;
+    }
     navigate(key);
   };
 
@@ -268,8 +284,17 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
 
   // 根据当前路径，自动展开所属分组
   useEffect(() => {
-    const groupKey = PATH_TO_GROUP_KEY[location.pathname];
+    // 处理动态路由，如 /app/integration/:projectId
+    let groupKey: string | undefined;
+    
+    if (location.pathname.startsWith('/app/integration/')) {
+      groupKey = 'group-management';
+    } else {
+      groupKey = PATH_TO_GROUP_KEY[location.pathname];
+    }
+    
     if (groupKey) {
+      // 只展开当前路径所属的分组，收缩其他分组
       setOpenKeys([groupKey]);
     }
   }, [location.pathname]);
@@ -439,7 +464,12 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
           <Menu
             theme={themeMode === 'dark' ? 'dark' : 'light'}
             mode="inline"
-            selectedKeys={[location.pathname]}
+            selectedKeys={[
+              // 对于接入指引页，需要匹配动态路由
+              isIntegrationPage && selectedProjectId 
+                ? `/app/integration/${selectedProjectId}` 
+                : location.pathname
+            ]}
             openKeys={openKeys}
             onOpenChange={setOpenKeys}
             items={menuItems as any}
@@ -516,6 +546,20 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
                   </Option>
                 ))}
               </Select>
+              {selectedProjectId && (
+                <Button 
+                  icon={<BookOutlined />}
+                  onClick={() => {
+                    // 先展开"管理"分组，收缩其他分组
+                    setOpenKeys(['group-management']);
+                    // 然后跳转到接入指引页
+                    navigate(`/app/integration/${selectedProjectId}`);
+                  }}
+                  disabled={isIntegrationPage}
+                >
+                  接入指引
+                </Button>
+              )}
               <Button type="primary" onClick={() => setIsModalVisible(true)}>创建项目</Button>
               {userInfo && (
                 <div ref={userInfoRef}>

@@ -168,6 +168,12 @@ export const apiService = {
     return data.data;
   },
 
+  // 获取项目详情
+  async getProjectDetail(projectId: string): Promise<Project> {
+    const data = await api.get(`/projects/${projectId}`);
+    return data.data;
+  },
+
   // 获取Top 5访问项目数据
   async getTopProjects(params: {
     projectId: string;

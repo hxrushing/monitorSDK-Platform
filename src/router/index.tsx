@@ -19,6 +19,8 @@ const Prediction = lazy(() => import('@/pages/Prediction'));
 const PredictionHistory = lazy(() => import('@/pages/PredictionHistory'));
 const PerformanceAnalysis = lazy(() => import('@/pages/PerformanceAnalysis'));
 const SDKTest = lazy(() => import('@/pages/SDKTest'));
+const IntegrationGuide = lazy(() => import('@/pages/IntegrationGuide'));
+const IntegrationSteps = lazy(() => import('@/pages/IntegrationSteps'));
 
 const isAuthed = () => !!localStorage.getItem('token') || !!localStorage.getItem('userInfo');
 
@@ -106,6 +108,16 @@ const router = createBrowserRouter([
       {
         path: 'sdk-test',
         element: withSuspense(<SDKTest />),
+        errorElement: <RouteErrorBoundary />,
+      },
+      {
+        path: 'integration/:projectId',
+        element: withSuspense(<IntegrationGuide />),
+        errorElement: <RouteErrorBoundary />,
+      },
+      {
+        path: 'integration/:projectId/steps',
+        element: withSuspense(<IntegrationSteps />),
         errorElement: <RouteErrorBoundary />,
       },
     ],
