@@ -53,6 +53,10 @@ export interface Project {
   id: string;
   name: string;
   description: string;
+  owner_id?: string | null;
+  created_at?: string;
+  updated_at?: string;
+  has_permission?: boolean;
 }
 
 export interface TopProject {
@@ -325,5 +329,29 @@ export const apiService = {
       timeout: 60000
     });
     return data.data;
+  },
+
+  // 项目权限管理API（仅Admin可访问）
+  // 获取指定用户的项目权限列表
+  async getUserProjectPermissions(userId: string): Promise<Project[]> {
+    const data = await api.get(`/project-permissions/${userId}`);
+    return data.data;
+  },
+
+  // 为用户分配项目权限
+  async assignUserProjectPermission(userId: string, projectId: string): Promise<void> {
+    await api.post('/project-permissions', { userId, projectId });
+  },
+
+  // 移除用户的项目权限
+  async removeUserProjectPermission(userId: string, projectId: string): Promise<void> {
+    await api.delete('/project-permissions', {
+      params: { userId, projectId }
+    });
+  },
+
+  // 批量更新用户的项目权限
+  async updateUserProjectPermissions(userId: string, projectIds: string[]): Promise<void> {
+    await api.put(`/project-permissions/${userId}`, { projectIds });
   }
 }; 

@@ -3,6 +3,7 @@ import MarkdownIt from 'markdown-it';
 import { StatsService, StatsData } from './statsService';
 import { AIService, SummaryData } from './aiService';
 import { EmailService } from './emailService';
+import { ProjectPermissionService } from './projectPermissionService';
 import { v4 as uuidv4 } from 'uuid';
 
 // 任务进度状态
@@ -50,7 +51,8 @@ export class SummaryService {
     private db: Connection | Pool,
     private statsService: StatsService,
     private aiService: AIService,
-    private emailService: EmailService
+    private emailService: EmailService,
+    private projectPermissionService?: ProjectPermissionService
   ) {
     // 定期清理过期的任务进度（1小时后）
     setInterval(() => {
@@ -359,21 +361,54 @@ export class SummaryService {
 
       this.updateProgress(currentTaskId, userId, 'collecting', 5, '获取项目列表...');
 
+      // 获取用户角色
+      const [userRows] = await this.db.execute<RowDataPacket[]>(
+        'SELECT role FROM users WHERE id = ?',
+        [userId]
+      );
+      const userRole = userRows[0]?.role || 'User';
+      const isAdmin = userRole === 'Admin';
+
       // 获取项目列表
       let projectIds: string[] = [];
       const MAX_PROJECTS = parseInt(process.env.AI_MAX_PROJECTS || '50'); // 最多处理的项目数
       
       if (setting.projectIds && Array.isArray(setting.projectIds) && setting.projectIds.length > 0) {
+        // 如果指定了项目，需要验证用户是否有权限访问这些项目
         projectIds = setting.projectIds;
         console.log('使用指定的项目:', projectIds);
+        
+        // 如果不是Admin，需要过滤掉没有权限的项目
+        if (!isAdmin && this.projectPermissionService) {
+          const userProjectIds = await this.projectPermissionService.getUserProjectIds(userId, projectIds);
+          projectIds = projectIds.filter(id => userProjectIds.includes(id));
+          console.log('过滤后的项目（仅包含有权限的）:', projectIds);
+        }
       } else {
-        // 如果没有指定项目，获取用户的所有项目
-        console.log('没有指定项目，获取所有项目');
-        const [projectRows] = await this.db.execute<RowDataPacket[]>(
-          'SELECT id FROM projects ORDER BY created_at DESC'
-        );
-        projectIds = (projectRows as RowDataPacket[]).map((row: RowDataPacket) => row.id as string);
-        console.log('获取到的所有项目:', projectIds);
+        // 如果没有指定项目，根据用户角色获取项目
+        if (isAdmin) {
+          // Admin用户获取所有项目
+          console.log('Admin用户，获取所有项目');
+          const [projectRows] = await this.db.execute<RowDataPacket[]>(
+            'SELECT id FROM projects ORDER BY created_at DESC'
+          );
+          projectIds = (projectRows as RowDataPacket[]).map((row: RowDataPacket) => row.id as string);
+        } else {
+          // 普通用户只获取有权限的项目
+          if (this.projectPermissionService) {
+            console.log('普通用户，获取有权限的项目');
+            const userProjects = await this.projectPermissionService.getUserProjects(userId);
+            projectIds = userProjects.map(p => p.id);
+          } else {
+            // 如果没有ProjectPermissionService，回退到获取所有项目（兼容旧代码）
+            console.warn('ProjectPermissionService未注入，回退到获取所有项目');
+            const [projectRows] = await this.db.execute<RowDataPacket[]>(
+              'SELECT id FROM projects ORDER BY created_at DESC'
+            );
+            projectIds = (projectRows as RowDataPacket[]).map((row: RowDataPacket) => row.id as string);
+          }
+        }
+        console.log('获取到的项目:', projectIds);
       }
 
       if (projectIds.length === 0) {

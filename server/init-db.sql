@@ -12,8 +12,11 @@ CREATE TABLE IF NOT EXISTS projects (
     id VARCHAR(36) PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
     description TEXT,
+    owner_id VARCHAR(36) NULL COMMENT '项目所有者/创建者ID',
     created_at DATETIME(3) DEFAULT CURRENT_TIMESTAMP(3),
-    updated_at DATETIME(3) DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3)
+    updated_at DATETIME(3) DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+    INDEX idx_owner_id (owner_id),
+    FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 创建事件定义表
@@ -96,6 +99,22 @@ CREATE TABLE IF NOT EXISTS ai_summary_settings (
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
   UNIQUE KEY unique_user_setting (user_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 创建用户项目权限关联表
+CREATE TABLE IF NOT EXISTS user_projects (
+  user_id VARCHAR(36) NOT NULL COMMENT '用户ID',
+  project_id VARCHAR(36) NOT NULL COMMENT '项目ID',
+  created_at DATETIME(3) DEFAULT CURRENT_TIMESTAMP(3) COMMENT '创建时间',
+  updated_at DATETIME(3) DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3) COMMENT '更新时间',
+  -- 复合主键：确保每个用户对每个项目只有一条权限记录，同时优化查询性能
+  PRIMARY KEY (user_id, project_id),
+  -- 索引：优化按项目查询用户的性能（user_id已在主键中，无需额外索引）
+  INDEX idx_project_id (project_id),
+  -- 外键约束：用户ID必须存在于users表
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  -- 外键约束：项目ID必须存在于projects表
+  FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户项目权限关联表';
 
 -- 插入更多示例事件数据
 INSERT INTO events (project_id, event_name, event_params, user_id, device_info, timestamp)

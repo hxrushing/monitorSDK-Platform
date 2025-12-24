@@ -1,18 +1,25 @@
 // SDK批量发送使用示例
 
-import AnalyticsSDK from './index';
+import { init } from './index';
 
 // 1. 基本使用 - 使用默认配置
-const sdk = AnalyticsSDK.getInstance('your-project-id', '/api/track');
+const sdk = init({
+  projectId: 'your-project-id',
+  endpoint: '/api/track',
+});
 
 // 2. 自定义配置使用
-const customSdk = AnalyticsSDK.getInstance('your-project-id', '/api/track', {
-  maxBatchSize: 20,        // 最大批量20个事件
-  flushInterval: 3000,      // 3秒刷新一次
-  maxRetries: 5,           // 最大重试5次
-  retryDelay: 2000,        // 重试延迟2秒
-  enableOfflineStorage: true, // 启用离线存储
-  maxStorageSize: 2 * 1024 * 1024, // 最大存储2MB
+const customSdk = init({
+  projectId: 'your-project-id',
+  endpoint: '/api/track',
+  batch: {
+    maxBatchSize: 20,        // 最大批量20个事件
+    flushInterval: 3000,      // 3秒刷新一次
+    maxRetries: 5,           // 最大重试5次
+    retryDelay: 2000,        // 重试延迟2秒
+    enableOfflineStorage: true, // 启用离线存储
+    maxStorageSize: 2 * 1024 * 1024, // 最大存储2MB
+  },
 });
 
 // 3. 设置用户ID
@@ -32,7 +39,7 @@ sdk.trackError('JavaScript Error', {
 });
 
 // 6. 发送用户行为事件
-sdk.trackUserAction('button_click', {
+sdk.track('button_click', {
   buttonId: 'submit-btn',
   formId: 'contact-form'
 });
@@ -42,16 +49,8 @@ sdk.flush().then(() => {
   console.log('所有事件已发送');
 });
 
-// 8. 获取队列状态
-const status = sdk.getQueueStatus();
-console.log('队列状态:', status);
-// 输出: { queueLength: 5, isOnline: true, config: {...} }
-
-// 9. 动态更新配置
-sdk.updateBatchConfig({
-  flushInterval: 10000, // 改为10秒刷新一次
-  maxBatchSize: 100     // 改为最大100个事件
-});
+// 8. 注意：新版本SDK不提供 getQueueStatus 和 updateBatchConfig 方法
+// 如需这些功能，可以通过 SDKCore 实例访问
 
 // 10. 模拟大量事件发送（测试批量发送效果）
 for (let i = 0; i < 100; i++) {

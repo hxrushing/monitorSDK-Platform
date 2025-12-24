@@ -29,7 +29,7 @@ export class Transport {
 
   // 自适应批量大小
   private currentBatchSize: number;
-  private networkMetrics: any = null;
+  // private networkMetrics: any = null; // 预留用于网络指标监控
   private networkCheckTimer: NodeJS.Timeout | null = null;
   private adjustmentTimer: NodeJS.Timeout | null = null;
   private recentSendResults: Array<{ success: boolean; duration: number; batchSize: number }> = [];
@@ -413,7 +413,7 @@ export class Transport {
   /**
    * 计算指数退避延迟
    */
-  private calculateBackoffDelay(retryCount: number, errorType: ErrorType): number {
+  private calculateBackoffDelay(retryCount: number, _errorType: ErrorType): number {
     const backoffConfig = this.batchConfig.exponentialBackoff;
     if (!backoffConfig?.enabled) {
       return this.batchConfig.retryDelay * retryCount;

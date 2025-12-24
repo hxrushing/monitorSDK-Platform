@@ -4,9 +4,10 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Card, Button, Space, Input, Divider, Typography, Alert, Tag, List } from 'antd';
+import { Card, Button, Space, Input, Select, Divider, Typography, Alert, Tag, List } from 'antd';
 import { init } from '../../sdk';
 import type { SDKInstance } from '../../sdk';
+import { apiService, Project } from '@/services/api';
 
 const { Title, Paragraph, Text } = Typography;
 
@@ -19,9 +20,26 @@ interface TestResult {
 const SDKTestPage: React.FC = () => {
   const [sdk, setSdk] = useState<SDKInstance | null>(null);
   const [projectId, setProjectId] = useState('demo-project');
+  const [projects, setProjects] = useState<Project[]>([]);
   const [endpoint, setEndpoint] = useState('http://localhost:3000/api/track');
   const [results, setResults] = useState<TestResult[]>([]);
   const [queueStatus, setQueueStatus] = useState<any>(null);
+
+  // 获取用户的项目列表并设置默认值
+  useEffect(() => {
+    const fetchProjects = async () => {
+      try {
+        const projectsList = await apiService.getProjects();
+        setProjects(projectsList);
+        if (projectsList && projectsList.length > 0) {
+          setProjectId(projectsList[0].id);
+        }
+      } catch (error) {
+        console.warn('获取项目列表失败，使用默认项目ID:', error);
+      }
+    };
+    fetchProjects();
+  }, []);
 
   // 添加测试结果
   const addResult = (type: 'success' | 'error' | 'info', message: string) => {
@@ -278,11 +296,20 @@ const SDKTestPage: React.FC = () => {
       <Card>
         <Space direction="vertical" style={{ width: '100%' }} size="middle">
           <div>
-            <Text strong>项目ID:</Text>
-            <Input
+            <Text strong>项目:</Text>
+            <Select
               value={projectId}
-              onChange={(e) => setProjectId(e.target.value)}
+              onChange={(value) => setProjectId(value)}
               style={{ width: '300px', marginLeft: '8px' }}
+              placeholder="请选择项目"
+              showSearch
+              filterOption={(input, option) =>
+                (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+              }
+              options={projects.map(project => ({
+                label: project.name,
+                value: project.id
+              }))}
             />
           </div>
           <div>

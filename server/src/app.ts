@@ -16,6 +16,7 @@ import { SummaryService } from './services/summaryService';
 import { StatsService } from './services/statsService';
 import { AIService } from './services/aiService';
 import { EmailService } from './services/emailService';
+import { ProjectPermissionService } from './services/projectPermissionService';
 import dotenv from 'dotenv';
 import swaggerUi from 'swagger-ui-express';
 import { swaggerSpec } from './swagger';
@@ -67,7 +68,8 @@ async function main() {
     const statsService = new StatsService(db);
     const aiService = new AIService();
     const emailService = new EmailService();
-    const summaryService = new SummaryService(db, statsService, aiService, emailService);
+    const projectPermissionService = new ProjectPermissionService(db);
+    const summaryService = new SummaryService(db, statsService, aiService, emailService, projectPermissionService);
     
     // 启动定时任务服务
     const schedulerService = new SchedulerService(db, summaryService);

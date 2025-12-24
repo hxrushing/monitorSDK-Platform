@@ -1,25 +1,30 @@
 // SDK批量发送机制测试文件
 
-import AnalyticsSDK from './index';
+import { init } from './index';
+import type { SDKInstance } from './index';
 
 // 测试配置
 const testConfig = {
-  maxBatchSize: 5,         // 小批量用于测试
-  flushInterval: 2000,      // 2秒刷新
-  maxRetries: 2,           // 2次重试
-  retryDelay: 1000,        // 1秒延迟
-  enableOfflineStorage: true,
-  maxStorageSize: 1024 * 1024, // 1MB
+  projectId: 'test-project',
+  endpoint: 'http://localhost:3000/api/track',
+  batch: {
+    maxBatchSize: 5,         // 小批量用于测试
+    flushInterval: 2000,      // 2秒刷新
+    maxRetries: 2,           // 2次重试
+    retryDelay: 1000,        // 1秒延迟
+    enableOfflineStorage: true,
+    maxStorageSize: 1024 * 1024, // 1MB
+  },
 };
 
 // 创建测试SDK实例
-const testSdk = AnalyticsSDK.getInstance('test-project', 'http://localhost:3000/api/track', testConfig);
+const testSdk = init(testConfig);
 
 // 测试函数
 export class BatchSendTester {
-  private sdk: AnalyticsSDK;
+  private sdk: SDKInstance;
 
-  constructor(sdk: AnalyticsSDK) {
+  constructor(sdk: SDKInstance) {
     this.sdk = sdk;
   }
 
@@ -36,9 +41,8 @@ export class BatchSendTester {
       });
     }
 
-    // 检查队列状态
-    const status = this.sdk.getQueueStatus();
-    console.log('队列状态:', status);
+    // 注意：新版本SDK不提供 getQueueStatus 方法
+    // 可以通过检查网络请求来验证事件是否发送
 
     // 手动刷新
     await this.sdk.flush();
@@ -58,9 +62,7 @@ export class BatchSendTester {
     // 发送高优先级事件
     this.sdk.track('high_priority_event', { priority: 'high' }, 'high');
     
-    // 检查队列状态
-    const status = this.sdk.getQueueStatus();
-    console.log('优先级测试队列状态:', status);
+    // 注意：新版本SDK不提供 getQueueStatus 方法
     
     await this.sdk.flush();
     console.log('✅ 优先级处理测试完成');
@@ -106,13 +108,17 @@ export class BatchSendTester {
     console.log('🧪 测试4: 重试机制');
     
     // 使用错误的端点测试重试
-    const errorSdk = AnalyticsSDK.getInstance('test-project', 'http://invalid-endpoint/api/track', {
-      maxBatchSize: 2,
-      flushInterval: 1000,
-      maxRetries: 2,
-      retryDelay: 500,
-      enableOfflineStorage: true,
-      maxStorageSize: 1024 * 1024,
+    const errorSdk = init({
+      projectId: 'test-project',
+      endpoint: 'http://invalid-endpoint/api/track',
+      batch: {
+        maxBatchSize: 2,
+        flushInterval: 1000,
+        maxRetries: 2,
+        retryDelay: 500,
+        enableOfflineStorage: true,
+        maxStorageSize: 1024 * 1024,
+      },
     });
 
     // 发送事件
@@ -122,8 +128,8 @@ export class BatchSendTester {
     // 等待重试
     await new Promise(resolve => setTimeout(resolve, 3000));
 
-    const status = errorSdk.getQueueStatus();
-    console.log('重试测试队列状态:', status);
+    // 注意：新版本SDK不提供 getQueueStatus 方法
+    console.log('重试测试：事件已发送，SDK会自动重试失败请求');
     
     console.log('✅ 重试机制测试完成');
   }
@@ -148,8 +154,8 @@ export class BatchSendTester {
     // 等待批量发送
     await new Promise(resolve => setTimeout(resolve, 3000));
 
-    const status = this.sdk.getQueueStatus();
-    console.log('性能测试后队列状态:', status);
+    // 注意：新版本SDK不提供 getQueueStatus 方法
+    console.log('性能测试：100个事件已添加到队列');
     
     console.log('✅ 性能测试完成');
   }
@@ -185,9 +191,8 @@ export class BatchSendTester {
     const storageKey = `analytics_events_test-project`;
     localStorage.removeItem(storageKey);
     
-    // 清理SDK实例
-    AnalyticsSDK.clearInstance('test-project', 'http://localhost:3000/api/track');
-    AnalyticsSDK.clearInstance('test-project', 'http://invalid-endpoint/api/track');
+    // 注意：新版本SDK使用单例模式，不需要手动清理实例
+    // 如果需要清理，可以通过 SDKCore.destroy() 方法
     
     console.log('🧹 测试数据清理完成');
   }

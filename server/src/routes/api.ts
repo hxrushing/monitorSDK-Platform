@@ -7,6 +7,7 @@ import { UserService } from '../services/userService';
 import { SummaryService } from '../services/summaryService';
 import { PredictionService } from '../services/predictionService';
 import { PredictionRecordService } from '../services/predictionRecordService';
+import { ProjectPermissionService } from '../services/projectPermissionService';
 import { cacheManager } from '../utils/cache';
 import { getRSAPublicKey, decryptRSA } from '../utils/crypto';
 import { Pool } from 'mysql2/promise';
@@ -20,6 +21,7 @@ export function createApiRouter(db: Pool, summaryService?: SummaryService) {
   const userService = new UserService(db);
   const predictionService = new PredictionService(db);
   const predictionRecordService = new PredictionRecordService(db);
+  const projectPermissionService = new ProjectPermissionService(db);
 
   const JWT_SECRET: Secret = process.env.JWT_SECRET || 'dev-secret';
   const JWT_EXPIRES_IN: SignOptions['expiresIn'] = (process.env.JWT_EXPIRES_IN as any) || '7d';
@@ -316,6 +318,74 @@ export function createApiRouter(db: Pool, summaryService?: SummaryService) {
   // 从这里开始的路由均需要鉴权
   router.use(authMiddleware);
 
+  // Admin权限检查中间件
+  const adminMiddleware: express.RequestHandler = (req, res, next) => {
+    const user = (req as any).user;
+    if (!user || user.role !== 'Admin') {
+      return res.status(403).json({ success: false, error: '需要管理员权限' });
+    }
+    next();
+  };
+
+  // 项目权限验证中间件工厂函数
+  // 支持从query、body或params中获取projectId
+  const createProjectPermissionMiddleware = (projectIdSource: 'query' | 'body' | 'params' | 'body.projectId' = 'query'): express.RequestHandler => {
+    return async (req, res, next) => {
+      try {
+        const user = (req as any).user;
+        if (!user || !user.sub) {
+          return res.status(401).json({ success: false, error: 'Unauthorized' });
+        }
+
+        const userId = user.sub;
+        const userRole = user.role || 'User';
+
+        // Admin用户跳过权限验证
+        if (userRole === 'Admin') {
+          return next();
+        }
+
+        // 从不同位置提取projectId
+        let projectId: string | undefined;
+        if (projectIdSource === 'query') {
+          projectId = req.query.projectId as string;
+        } else if (projectIdSource === 'body') {
+          projectId = req.body.projectId;
+        } else if (projectIdSource === 'params') {
+          projectId = req.params.projectId;
+        } else if (projectIdSource === 'body.projectId') {
+          // 支持body中的projectId（用于event-definitions等）
+          projectId = req.body?.projectId;
+        }
+
+        if (!projectId) {
+          return res.status(400).json({ 
+            success: false, 
+            error: 'Project ID is required' 
+          });
+        }
+
+        // 验证用户是否有权限访问该项目
+        const hasPermission = await projectPermissionService.hasPermission(userId, projectId);
+        
+        if (!hasPermission) {
+          return res.status(403).json({ 
+            success: false, 
+            error: '无权访问该项目' 
+          });
+        }
+
+        next();
+      } catch (error) {
+        console.error('项目权限验证失败:', error);
+        return res.status(500).json({ 
+          success: false, 
+          error: 'Internal Server Error' 
+        });
+      }
+    };
+  };
+
   // 获取用户列表
   router.get('/users', async (req, res) => {
     try {
@@ -351,8 +421,105 @@ export function createApiRouter(db: Pool, summaryService?: SummaryService) {
     }
   });
 
+  // ==================== 项目权限管理API（仅Admin可访问） ====================
+  
+  // 获取指定用户的项目权限列表
+  router.get('/project-permissions/:userId', adminMiddleware, async (req, res) => {
+    try {
+      const { userId } = req.params;
+      
+      const projects = await projectPermissionService.getUserProjects(userId);
+      
+      res.json({ success: true, data: projects });
+    } catch (error: any) {
+      console.error('获取用户项目权限失败:', error);
+      res.status(500).json({ 
+        success: false, 
+        error: error.message || 'Internal Server Error' 
+      });
+    }
+  });
+
+  // 为用户分配项目权限
+  router.post('/project-permissions', adminMiddleware, async (req, res) => {
+    try {
+      const { userId, projectId } = req.body;
+      
+      if (!userId || !projectId) {
+        return res.status(400).json({ 
+          success: false, 
+          error: 'userId 和 projectId 是必需的' 
+        });
+      }
+
+      await projectPermissionService.assignPermission(userId, projectId);
+      
+      res.json({ success: true, message: '权限分配成功' });
+    } catch (error: any) {
+      console.error('分配项目权限失败:', error);
+      const statusCode = error.message === '用户不存在' || error.message === '项目不存在' ? 400 : 500;
+      res.status(statusCode).json({ 
+        success: false, 
+        error: error.message || 'Internal Server Error' 
+      });
+    }
+  });
+
+  // 移除用户的项目权限
+  router.delete('/project-permissions', adminMiddleware, async (req, res) => {
+    try {
+      const { userId, projectId } = req.query;
+      
+      if (!userId || !projectId) {
+        return res.status(400).json({ 
+          success: false, 
+          error: 'userId 和 projectId 是必需的' 
+        });
+      }
+
+      await projectPermissionService.removePermission(
+        userId as string, 
+        projectId as string
+      );
+      
+      res.json({ success: true, message: '权限移除成功' });
+    } catch (error: any) {
+      console.error('移除项目权限失败:', error);
+      res.status(500).json({ 
+        success: false, 
+        error: error.message || 'Internal Server Error' 
+      });
+    }
+  });
+
+  // 批量更新用户的项目权限
+  router.put('/project-permissions/:userId', adminMiddleware, async (req, res) => {
+    try {
+      const { userId } = req.params;
+      const { projectIds } = req.body;
+      
+      if (!Array.isArray(projectIds)) {
+        return res.status(400).json({ 
+          success: false, 
+          error: 'projectIds 必须是数组' 
+        });
+      }
+
+      await projectPermissionService.updateUserProjects(userId, projectIds);
+      
+      res.json({ success: true, message: '权限更新成功' });
+    } catch (error: any) {
+      console.error('批量更新项目权限失败:', error);
+      const statusCode = error.message === '用户不存在' ? 400 : 500;
+      res.status(statusCode).json({ 
+        success: false, 
+        error: error.message || 'Internal Server Error' 
+      });
+    }
+  });
+
   // 获取事件定义列表
-  router.get('/event-definitions', async (req, res) => {
+  router.get('/event-definitions', createProjectPermissionMiddleware('query'), async (req, res) => {
     try {
       const projectId = req.query.projectId as string;
       if (!projectId) {
@@ -371,7 +538,7 @@ export function createApiRouter(db: Pool, summaryService?: SummaryService) {
   });
 
   // 创建事件定义
-  router.post('/event-definitions', async (req, res) => {
+  router.post('/event-definitions', createProjectPermissionMiddleware('body.projectId'), async (req, res) => {
     try {
       const { projectId, eventName, description, paramsSchema } = req.body || {};
       if (!projectId || !eventName || !description || paramsSchema == null) {
@@ -393,7 +560,7 @@ export function createApiRouter(db: Pool, summaryService?: SummaryService) {
   });
 
   // 更新事件定义
-  router.put('/event-definitions/:id', async (req, res) => {
+  router.put('/event-definitions/:id', createProjectPermissionMiddleware('body.projectId'), async (req, res) => {
     try {
       const data = await eventDefinitionService.updateEventDefinition(
         req.params.id,
@@ -407,7 +574,7 @@ export function createApiRouter(db: Pool, summaryService?: SummaryService) {
   });
 
   // 删除事件定义
-  router.delete('/event-definitions/:id', async (req, res) => {
+  router.delete('/event-definitions/:id', createProjectPermissionMiddleware('query'), async (req, res) => {
     try {
       const projectId = req.query.projectId as string;
       if (!projectId) {
@@ -426,7 +593,7 @@ export function createApiRouter(db: Pool, summaryService?: SummaryService) {
   });
 
   // 获取事件分析数据
-  router.get('/events/analysis', async (req, res) => {
+  router.get('/events/analysis', createProjectPermissionMiddleware('query'), async (req, res) => {
     try {
       const params = {
         projectId: req.query.projectId as string,
@@ -453,7 +620,7 @@ export function createApiRouter(db: Pool, summaryService?: SummaryService) {
   });
 
   // 获取漏斗分析数据
-  router.get('/funnel/analysis', async (req, res) => {
+  router.get('/funnel/analysis', createProjectPermissionMiddleware('query'), async (req, res) => {
     try {
       const params = {
         projectId: req.query.projectId as string,
@@ -480,7 +647,7 @@ export function createApiRouter(db: Pool, summaryService?: SummaryService) {
   });
 
   // 获取统计数据
-  router.get('/stats', async (req, res) => {
+  router.get('/stats', createProjectPermissionMiddleware('query'), async (req, res) => {
     try {
       const data = await statsService.getStats({
         projectId: req.query.projectId as string,
@@ -496,7 +663,7 @@ export function createApiRouter(db: Pool, summaryService?: SummaryService) {
   });
 
   // 获取仪表盘概览数据
-  router.get('/dashboard/overview', async (req, res) => {
+  router.get('/dashboard/overview', createProjectPermissionMiddleware('query'), async (req, res) => {
     try {
       const projectId = req.query.projectId as string;
       if (!projectId) {
@@ -515,7 +682,7 @@ export function createApiRouter(db: Pool, summaryService?: SummaryService) {
   });
 
   // 获取性能分析数据
-  router.get('/performance/analysis', async (req, res) => {
+  router.get('/performance/analysis', createProjectPermissionMiddleware('query'), async (req, res) => {
     try {
       const params = {
         projectId: req.query.projectId as string,
@@ -544,17 +711,38 @@ export function createApiRouter(db: Pool, summaryService?: SummaryService) {
   // 创建项目
   router.post('/projects', async (req, res) => {
     try {
+      const user = (req as any).user;
+      if (!user || !user.sub) {
+        return res.status(401).json({ success: false, error: 'Unauthorized' });
+      }
+
+      const userId = user.sub;
       const { name, description } = req.body;
+
+      if (!name) {
+        return res.status(400).json({ success: false, error: '项目名称不能为空' });
+      }
+
       const id = uuidv4();
       
+      // 创建项目，设置owner_id为创建者ID
       await db.execute(
-        'INSERT INTO projects (id, name, description) VALUES (?, ?, ?)',
-        [id, name, description]
+        'INSERT INTO projects (id, name, description, owner_id) VALUES (?, ?, ?, ?)',
+        [id, name, description || null, userId]
       );
+
+      // 自动为创建者分配项目权限
+      try {
+        await projectPermissionService.assignPermission(userId, id);
+      } catch (permError) {
+        // 如果权限分配失败，记录错误但不影响项目创建
+        console.error('为创建者分配项目权限失败:', permError);
+        // 可以选择继续或回滚，这里选择继续，因为项目已创建
+      }
 
       res.status(201).json({ 
         success: true, 
-        data: { id, name, description } 
+        data: { id, name, description, owner_id: userId } 
       });
     } catch (error) {
       console.error('Error creating project:', error);
@@ -562,11 +750,29 @@ export function createApiRouter(db: Pool, summaryService?: SummaryService) {
     }
   });
 
-  // 获取项目列表
+  // 获取项目列表（根据用户角色和权限过滤）
   router.get('/projects', async (req, res) => {
     try {
-      const [rows] = await db.execute('SELECT * FROM projects ORDER BY created_at DESC');
-      res.json({ success: true, data: rows });
+      const user = (req as any).user;
+      if (!user || !user.sub) {
+        return res.status(401).json({ success: false, error: 'Unauthorized' });
+      }
+
+      const userId = user.sub;
+      const userRole = user.role || 'User';
+
+      let projects;
+
+      if (userRole === 'Admin') {
+        // Admin用户可以看到所有项目
+        const [rows] = await db.execute('SELECT * FROM projects ORDER BY created_at DESC');
+        projects = rows;
+      } else {
+        // 普通用户只能看到有权限的项目
+        projects = await projectPermissionService.getUserProjects(userId);
+      }
+
+      res.json({ success: true, data: projects });
     } catch (error) {
       console.error('Error getting projects:', error);
       res.status(500).json({ success: false, error: 'Internal Server Error' });
@@ -574,7 +780,7 @@ export function createApiRouter(db: Pool, summaryService?: SummaryService) {
   });
 
   // 获取Top 5访问项目数据
-  router.get('/top-projects', async (req, res) => {
+  router.get('/top-projects', createProjectPermissionMiddleware('query'), async (req, res) => {
     try {
       const { projectId, startDate, endDate } = req.query;
       
@@ -733,7 +939,7 @@ export function createApiRouter(db: Pool, summaryService?: SummaryService) {
   });
 
   // 预测单个指标
-  router.post('/prediction/predict', async (req, res) => {
+  router.post('/prediction/predict', createProjectPermissionMiddleware('body'), async (req, res) => {
     try {
       const { projectId, metricType, modelType, days } = req.body;
       
@@ -795,7 +1001,7 @@ export function createApiRouter(db: Pool, summaryService?: SummaryService) {
   });
 
   // 批量预测多个指标
-  router.post('/prediction/predict-batch', async (req, res) => {
+  router.post('/prediction/predict-batch', createProjectPermissionMiddleware('body'), async (req, res) => {
     try {
       const { projectId, metrics, modelType, days } = req.body;
       
@@ -847,10 +1053,16 @@ export function createApiRouter(db: Pool, summaryService?: SummaryService) {
     }
   });
 
-  // 查询预测历史记录
+  // 查询预测历史记录（如果提供了projectId，需要验证权限）
   router.get('/prediction/records', async (req, res) => {
     try {
-      const userId = (req as any).user?.sub;
+      const user = (req as any).user;
+      if (!user || !user.sub) {
+        return res.status(401).json({ success: false, error: 'Unauthorized' });
+      }
+
+      const userId = user.sub;
+      const userRole = user.role || 'User';
       const { 
         projectId, 
         metricType, 
@@ -860,6 +1072,17 @@ export function createApiRouter(db: Pool, summaryService?: SummaryService) {
         page, 
         pageSize 
       } = req.query;
+
+      // 如果提供了projectId，验证权限（Admin跳过）
+      if (projectId && userRole !== 'Admin') {
+        const hasPermission = await projectPermissionService.hasPermission(userId, projectId as string);
+        if (!hasPermission) {
+          return res.status(403).json({ 
+            success: false, 
+            error: '无权访问该项目' 
+          });
+        }
+      }
 
       const result = await predictionRecordService.getRecords({
         projectId: projectId as string,

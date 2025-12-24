@@ -77,7 +77,11 @@ export async function getPublicKey(): Promise<string> {
       throw new Error('获取公钥失败');
     }
     const data = await response.json();
-    cachedPublicKey = data.publicKey;
+    const publicKey = data.publicKey;
+    if (!publicKey || typeof publicKey !== 'string') {
+      throw new Error('无效的公钥格式');
+    }
+    cachedPublicKey = publicKey;
     return cachedPublicKey;
   } catch (error) {
     console.error('获取公钥失败:', error);

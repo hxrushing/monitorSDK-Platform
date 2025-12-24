@@ -1,5 +1,6 @@
 import { onCLS, onFCP, onLCP, onTTFB, onINP, Metric } from 'web-vitals';
-import AnalyticsSDK from '@/sdk';
+import { init } from '@/sdk';
+import type { SDKInstance } from '@/sdk';
 
 /**
  * Web Vitals 性能指标类型
@@ -8,12 +9,20 @@ export type PerformanceMetric = Metric;
 
 type ReportHandler = (metric: PerformanceMetric) => void;
 
+// 缓存SDK实例
+let cachedSDKInstance: SDKInstance | null = null;
+
 /**
  * 获取当前项目的 SDK 实例
  * 如果 SDK 未初始化，返回 null
  */
-function getSDKInstance(): AnalyticsSDK | null {
+function getSDKInstance(): SDKInstance | null {
   try {
+    // 如果已有缓存的实例，直接返回
+    if (cachedSDKInstance) {
+      return cachedSDKInstance;
+    }
+
     // 尝试从全局存储获取项目ID
     let projectId = (window as any).__ANALYTICS_PROJECT_ID__;
     
@@ -29,7 +38,11 @@ function getSDKInstance(): AnalyticsSDK | null {
 
     // 直接使用相对路径 /api
     const endpoint = '/api/track';
-    return AnalyticsSDK.getInstance(projectId, endpoint);
+    cachedSDKInstance = init({
+      projectId,
+      endpoint,
+    });
+    return cachedSDKInstance;
   } catch (error) {
     console.warn('[Performance] SDK 未初始化，性能数据将仅输出到控制台');
     return null;
