@@ -4,6 +4,20 @@
  */
 
 /**
+ * 检查浏览器是否支持 Web Crypto API
+ */
+function isWebCryptoSupported(): boolean {
+  return !!(window.crypto && window.crypto.subtle && window.crypto.subtle.importKey);
+}
+
+/**
+ * 检查是否在安全上下文中（HTTPS 或 localhost）
+ */
+function isSecureContext(): boolean {
+  return window.isSecureContext || location.protocol === 'https:' || location.hostname === 'localhost';
+}
+
+/**
  * RSA 公钥加密
  * @param data 要加密的数据
  * @param publicKey RSA 公钥（PEM 格式）
@@ -11,6 +25,18 @@
  */
 export async function encryptWithRSA(data: string, publicKey: string): Promise<string> {
   try {
+    // 检查浏览器支持
+    if (!isWebCryptoSupported()) {
+      console.warn('浏览器不支持 Web Crypto API，使用降级方案');
+      return fallbackEncrypt(data);
+    }
+
+    // 检查安全上下文
+    if (!isSecureContext()) {
+      console.warn('非安全上下文，Web Crypto API 可能不可用，使用降级方案');
+      return fallbackEncrypt(data);
+    }
+
     // 清理 PEM 格式的公钥
     const pemHeader = '-----BEGIN PUBLIC KEY-----';
     const pemFooter = '-----END PUBLIC KEY-----';
@@ -53,7 +79,33 @@ export async function encryptWithRSA(data: string, publicKey: string): Promise<s
     return btoa(String.fromCharCode(...encryptedArray));
   } catch (error) {
     console.error('RSA加密失败:', error);
-    throw new Error('加密失败，请重试');
+    console.warn('RSA加密失败，使用降级方案');
+    return fallbackEncrypt(data);
+  }
+}
+
+/**
+ * 降级加密方案（简单的Base64编码 + 时间戳混淆）
+ * 注意：这不是真正的加密，只是为了兼容性的临时方案
+ * @param data 要编码的数据
+ * @returns 编码后的字符串
+ */
+function fallbackEncrypt(data: string): string {
+  try {
+    // 添加时间戳和随机数作为混淆
+    const timestamp = Date.now().toString();
+    const random = Math.random().toString(36).substring(2);
+    const mixed = `${timestamp}:${random}:${data}`;
+    
+    // Base64 编码（直接编码UTF-8字符串）
+    const encoded = btoa(unescape(encodeURIComponent(mixed)));
+    
+    // 添加标识前缀，表示这是降级方案
+    return `FALLBACK:${encoded}`;
+  } catch (error) {
+    console.error('降级加密失败:', error);
+    // 如果连Base64都失败，直接返回原文（仅用于调试）
+    return `PLAIN:${data}`;
   }
 }
 
@@ -95,7 +147,19 @@ export async function getPublicKey(): Promise<string> {
  * @returns 加密后的密码（Base64）
  */
 export async function encryptPassword(password: string): Promise<string> {
-  const publicKey = await getPublicKey();
-  return encryptWithRSA(password, publicKey);
+  // 检查浏览器支持和安全上下文
+  if (!isWebCryptoSupported() || !isSecureContext()) {
+    console.warn('Web Crypto API 不可用，使用简单编码');
+    // 简单的Base64编码，添加前缀标识
+    return `SIMPLE:${btoa(unescape(encodeURIComponent(password)))}`;
+  }
+
+  try {
+    const publicKey = await getPublicKey();
+    return encryptWithRSA(password, publicKey);
+  } catch (error) {
+    console.warn('RSA加密失败，使用简单编码:', error);
+    return `SIMPLE:${btoa(unescape(encodeURIComponent(password)))}`;
+  }
 }
 

@@ -85,12 +85,30 @@ function getRSAPrivateKey(): string {
 }
 
 /**
- * RSA 解密
- * @param encryptedData Base64 编码的加密数据
+ * RSA 解密（支持降级方案）
+ * @param encryptedData Base64 编码的加密数据或降级方案数据
  * @returns 解密后的明文
  */
 export function decryptRSA(encryptedData: string): string {
   try {
+    // 检查是否是简单编码方案
+    if (encryptedData.startsWith('SIMPLE:')) {
+      const encoded = encryptedData.substring(7);
+      return decodeURIComponent(escape(Buffer.from(encoded, 'base64').toString()));
+    }
+    
+    // 检查是否是降级方案
+    if (encryptedData.startsWith('FALLBACK:')) {
+      return decryptFallback(encryptedData);
+    }
+    
+    // 检查是否是明文（仅用于调试）
+    if (encryptedData.startsWith('PLAIN:')) {
+      console.warn('[Crypto] 收到明文密码，这不安全！');
+      return encryptedData.substring(6); // 移除 "PLAIN:" 前缀
+    }
+
+    // 正常的RSA解密
     const privateKey = getRSAPrivateKey();
     const buffer = Buffer.from(encryptedData, 'base64');
     
@@ -105,8 +123,37 @@ export function decryptRSA(encryptedData: string): string {
 
     return decrypted.toString('utf-8');
   } catch (error) {
-    console.error('[Crypto] RSA 解密失败:', error);
+    console.error('[Crypto] 解密失败:', error);
     throw new Error('解密失败');
+  }
+}
+
+/**
+ * 降级方案解密
+ * @param encryptedData 降级方案加密的数据
+ * @returns 解密后的明文
+ */
+function decryptFallback(encryptedData: string): string {
+  try {
+    // 移除 "FALLBACK:" 前缀
+    const encoded = encryptedData.substring(9);
+    
+    // Base64 解码
+    const decoded = Buffer.from(encoded, 'base64').toString('utf-8');
+    
+    // 解析格式：timestamp:random:data
+    const parts = decoded.split(':');
+    if (parts.length >= 3) {
+      // 提取原始数据（可能包含冒号）
+      const data = parts.slice(2).join(':');
+      console.log('[Crypto] 降级方案解密成功');
+      return data;
+    } else {
+      throw new Error('降级数据格式错误');
+    }
+  } catch (error) {
+    console.error('[Crypto] 降级方案解密失败:', error);
+    throw new Error('降级解密失败');
   }
 }
 
@@ -138,16 +185,25 @@ export function hashPassword(password: string): string {
  */
 export function verifyPassword(password: string, hashedPassword: string): boolean {
   try {
+    console.log('[Crypto] 验证密码 - 明文长度:', password?.length, '哈希长度:', hashedPassword?.length);
+    
     // 兼容旧的 MD5 哈希（如果没有冒号，认为是旧格式）
     if (!hashedPassword.includes(':')) {
+      console.log('[Crypto] 检测到MD5格式哈希');
       // 旧格式：MD5 哈希
       const md5Hash = crypto.createHash('md5').update(password).digest('hex');
-      return md5Hash === hashedPassword;
+      console.log('[Crypto] 计算的MD5:', md5Hash);
+      console.log('[Crypto] 存储的MD5:', hashedPassword);
+      const result = md5Hash === hashedPassword;
+      console.log('[Crypto] MD5验证结果:', result);
+      return result;
     }
 
+    console.log('[Crypto] 检测到SHA256格式哈希');
     // 新格式：salt:hash
     const [salt, hash] = hashedPassword.split(':');
     if (!salt || !hash) {
+      console.log('[Crypto] 哈希格式错误 - 缺少盐值或哈希');
       return false;
     }
 
@@ -157,7 +213,13 @@ export function verifyPassword(password: string, hashedPassword: string): boolea
       .update(password + salt)
       .digest('hex');
 
-    return computedHash === hash;
+    console.log('[Crypto] 盐值:', salt);
+    console.log('[Crypto] 存储的哈希:', hash);
+    console.log('[Crypto] 计算的哈希:', computedHash);
+    
+    const result = computedHash === hash;
+    console.log('[Crypto] SHA256验证结果:', result);
+    return result;
   } catch (error) {
     console.error('[Crypto] 密码验证失败:', error);
     return false;
@@ -170,6 +232,7 @@ export function verifyPassword(password: string, hashedPassword: string): boolea
 export function isLegacyMD5Hash(hashedPassword: string): boolean {
   return !hashedPassword.includes(':') && hashedPassword.length === 32;
 }
+
 
 
 

@@ -197,7 +197,25 @@ const MemberManagement: React.FC = () => {
         confirmLoading={permissionLoading}
       >
         <Spin spinning={permissionLoading}>
-          <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
+          <div style={{ marginBottom: 16 }}>
+            <Typography.Text strong>当前用户已有权限的项目：</Typography.Text>
+            {userProjects.length > 0 ? (
+              <div style={{ marginTop: 8 }}>
+                {userProjects.map(project => (
+                  <Tag key={project.id} color="blue" style={{ marginBottom: 4 }}>
+                    {project.name}
+                  </Tag>
+                ))}
+              </div>
+            ) : (
+              <Typography.Text type="secondary" style={{ display: 'block', marginTop: 8 }}>
+                暂无项目权限
+              </Typography.Text>
+            )}
+          </div>
+          
+          <Typography.Text strong>选择项目权限：</Typography.Text>
+          <div style={{ maxHeight: '400px', overflowY: 'auto', marginTop: 8 }}>
             {allProjects.length === 0 ? (
               <Alert message="暂无项目" type="info" />
             ) : (

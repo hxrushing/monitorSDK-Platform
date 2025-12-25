@@ -45,15 +45,21 @@ export function createApiRouter(db: Pool, summaryService?: SummaryService) {
   // 密码解密中间件（用于登录和注册接口）
   const decryptPasswordMiddleware: express.RequestHandler = (req, res, next) => {
     try {
+      console.log('[Auth] 收到请求体:', JSON.stringify(req.body, null, 2));
+      
       if (req.body.password && typeof req.body.password === 'string') {
+        const originalPassword = req.body.password;
+        console.log('[Auth] 原始密码数据:', originalPassword);
+        
         // 尝试解密（如果加密了）
-        // 如果解密失败，可能是旧版本客户端发送的明文，保持兼容
         try {
-          req.body.password = decryptRSA(req.body.password);
+          const decryptedPassword = decryptRSA(req.body.password);
+          req.body.password = decryptedPassword;
+          console.log('[Auth] 密码解密成功，长度:', decryptedPassword.length);
         } catch (error) {
           // 解密失败，可能是明文或格式错误
-          // 为了兼容性，暂时允许明文（生产环境应该强制加密）
-          console.warn('[Auth] 密码未加密，建议使用加密传输');
+          console.warn('[Auth] 密码解密失败:', error.message);
+          console.warn('[Auth] 保持原始密码');
         }
       }
       next();
@@ -88,23 +94,34 @@ export function createApiRouter(db: Pool, summaryService?: SummaryService) {
     try {
       const { username, password } = req.body;
       
+      console.log('[Login] 登录请求 - 用户名:', username, '密码长度:', password?.length);
+      
       if (!username || !password) {
+        console.log('[Login] 参数验证失败 - 用户名或密码为空');
         return res.status(400).json({
           success: false,
           error: '用户名和密码不能为空'
         });
       }
 
+      console.log('[Login] 调用用户服务进行登录验证');
       const result = await userService.login(username, password);
+      
+      console.log('[Login] 登录结果:', result.success ? '成功' : '失败');
+      if (!result.success) {
+        console.log('[Login] 登录失败原因:', result.error);
+      }
+      
       if (result.success && result.user) {
         const payload = { sub: result.user.id, username: result.user.username, role: result.user.role };
         const signOptions: SignOptions = { expiresIn: JWT_EXPIRES_IN };
         const token = jwt.sign(payload, JWT_SECRET, signOptions);
+        console.log('[Login] JWT令牌生成成功');
         return res.json({ ...result, token });
       }
       res.json(result);
     } catch (error) {
-      console.error('登录失败:', error);
+      console.error('[Login] 登录异常:', error);
       res.status(500).json({
         success: false,
         error: '登录失败，请稍后重试'

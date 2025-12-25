@@ -79,33 +79,46 @@ export class UserService {
   // 用户登录
   async login(username: string, password: string): Promise<LoginResponse> {
     try {
+      console.log('[UserService] 登录请求 - 用户名:', username);
+      
       // 先查找用户（不验证密码，因为密码哈希格式可能不同）
       const [rows] = await this.db.execute(
         'SELECT * FROM users WHERE username = ?',
         [username]
       );
       
+      console.log('[UserService] 数据库查询结果 - 找到用户数量:', Array.isArray(rows) ? rows.length : 0);
+      
       if (Array.isArray(rows) && rows.length > 0) {
         const user = rows[0] as User;
+        console.log('[UserService] 找到用户:', user.username, '密码哈希长度:', user.password?.length);
         
         // 验证密码（支持新旧格式）
-        if (verifyPassword(password, user.password)) {
+        console.log('[UserService] 开始验证密码');
+        const passwordValid = verifyPassword(password, user.password);
+        console.log('[UserService] 密码验证结果:', passwordValid ? '成功' : '失败');
+        
+        if (passwordValid) {
           // 返回用户信息（不包含密码）
           const { password: _, ...userWithoutPassword } = user;
           
+          console.log('[UserService] 登录成功');
           return {
             success: true,
             user: userWithoutPassword
           };
         }
+      } else {
+        console.log('[UserService] 用户不存在:', username);
       }
       
+      console.log('[UserService] 登录失败 - 用户名或密码错误');
       return {
         success: false,
         error: '用户名或密码错误'
       };
     } catch (err) {
-      console.error('登录失败:', err);
+      console.error('[UserService] 登录异常:', err);
       return {
         success: false,
         error: '登录失败，请稍后重试'
