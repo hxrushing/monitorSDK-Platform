@@ -36,6 +36,7 @@ src/docs
 # RSA 密钥文件（敏感信息，不应提交到版本控制）
 server/keys/
 
-# Markdown 文件
+# Markdown 文件（但保留 README.md）
 *.md
+!README.md
 *.mdc
