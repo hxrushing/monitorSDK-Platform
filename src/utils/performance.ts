@@ -12,11 +12,20 @@ type ReportHandler = (metric: PerformanceMetric) => void;
 // 缓存SDK实例
 let cachedSDKInstance: SDKInstance | null = null;
 
+// 性能采集启用状态（默认开启）
+let isPerformanceCollectionEnabled = true;
+
 /**
  * 获取当前项目的 SDK 实例
  * 如果 SDK 未初始化，返回 null
+ * 如果性能采集已禁用，返回 null
  */
 function getSDKInstance(): SDKInstance | null {
+  // 如果性能采集已禁用，不初始化SDK
+  if (!isPerformanceCollectionEnabled) {
+    return null;
+  }
+
   try {
     // 如果已有缓存的实例，直接返回
     if (cachedSDKInstance) {
@@ -38,9 +47,18 @@ function getSDKInstance(): SDKInstance | null {
 
     // 直接使用相对路径 /api
     const endpoint = '/api/track';
+    
+    // 如果性能采集已禁用，不初始化任何探针
     cachedSDKInstance = init({
       projectId,
       endpoint,
+      enable: {
+        error: false,
+        http: false,
+        perf: false,
+        behavior: false,
+        blankScreen: false,
+      },
     });
     return cachedSDKInstance;
   } catch (error) {
@@ -53,6 +71,11 @@ function getSDKInstance(): SDKInstance | null {
  * 发送性能指标到分析服务
  */
 function sendToAnalytics(metric: PerformanceMetric) {
+  // 如果性能采集已禁用，直接返回
+  if (!isPerformanceCollectionEnabled) {
+    return;
+  }
+
   const sdk = getSDKInstance();
   
   if (sdk) {
@@ -125,7 +148,7 @@ export function reportWebVitals(onPerfEntry?: ReportHandler) {
     onINP(onPerfEntry); // INP 替代了 FID
   }
 
-  // 同时发送到分析服务
+  // 同时发送到分析服务（sendToAnalytics 内部会检查启用状态）
   onCLS(sendToAnalytics);
   onFCP(sendToAnalytics);
   onLCP(sendToAnalytics);
@@ -134,18 +157,95 @@ export function reportWebVitals(onPerfEntry?: ReportHandler) {
 }
 
 /**
+ * 启用性能采集
+ */
+export function enablePerformanceMonitoring() {
+  isPerformanceCollectionEnabled = true;
+  if (import.meta.env.DEV) {
+    console.log('[Performance] 性能采集已启用');
+  }
+}
+
+/**
+ * 禁用性能采集
+ */
+export function disablePerformanceMonitoring() {
+  isPerformanceCollectionEnabled = false;
+  if (import.meta.env.DEV) {
+    console.log('[Performance] 性能采集已禁用');
+  }
+}
+
+/**
+ * 获取当前性能采集状态
+ */
+export function getPerformanceCollectionEnabled(): boolean {
+  return isPerformanceCollectionEnabled;
+}
+
+/**
+ * 设置性能采集状态
+ */
+export function setPerformanceCollectionEnabled(enabled: boolean) {
+  isPerformanceCollectionEnabled = enabled;
+  
+  // 如果禁用性能采集，销毁已存在的SDK实例和所有探针
+  if (!enabled && cachedSDKInstance) {
+    try {
+      // 获取SDKCore实例并销毁
+      const projectId = (window as any).__ANALYTICS_PROJECT_ID__ || localStorage.getItem('selectedProjectId') || 'demo-project';
+      const endpoint = '/api/track';
+      
+      // 导入SDKCore以访问静态方法和实例
+      import('@/sdk/core/api').then((module) => {
+        const SDKCore = module.SDKCore as any;
+        const key = `${projectId}-${endpoint}`;
+        
+        // 获取实例并销毁
+        if (SDKCore.instances && SDKCore.instances.has(key)) {
+          const instance = SDKCore.instances.get(key);
+          if (instance && typeof instance.destroy === 'function') {
+            instance.destroy();
+          }
+        }
+      }).catch((err) => {
+        console.warn('[Performance] 销毁SDK实例时出错:', err);
+      });
+      
+      cachedSDKInstance = null;
+    } catch (error) {
+      console.warn('[Performance] 销毁SDK实例时出错:', error);
+      cachedSDKInstance = null;
+    }
+  }
+  
+  if (import.meta.env.DEV) {
+    console.log(`[Performance] 性能采集已${enabled ? '启用' : '禁用'}`);
+  }
+}
+
+/**
  * 初始化性能监控
  * 需要在应用启动时调用
  * @param projectId 项目ID，如果不提供则从 localStorage 读取
+ * @param enabled 是否启用性能采集，如果不提供则从 localStorage 读取
  */
-export function initPerformanceMonitoring(projectId?: string) {
+export function initPerformanceMonitoring(projectId?: string, enabled?: boolean) {
   // 获取项目ID
   const finalProjectId = projectId || localStorage.getItem('selectedProjectId') || 'demo-project';
+  
+  // 获取性能采集状态（如果未传入，从 localStorage 读取）
+  if (enabled === undefined) {
+    const stored = localStorage.getItem('performanceCollectionEnabled');
+    isPerformanceCollectionEnabled = stored !== null ? stored === 'true' : true;
+  } else {
+    isPerformanceCollectionEnabled = enabled;
+  }
   
   // 将项目ID存储到全局，供 SDK 使用
   (window as any).__ANALYTICS_PROJECT_ID__ = finalProjectId;
 
-  // 注册性能监控
+  // 注册性能监控（sendToAnalytics 内部会检查启用状态）
   reportWebVitals();
 
   // 监听项目ID变化（通过监听 storage 事件，适用于跨标签页）
@@ -155,6 +255,13 @@ export function initPerformanceMonitoring(projectId?: string) {
         (window as any).__ANALYTICS_PROJECT_ID__ = e.newValue;
         if (import.meta.env.DEV) {
           console.log('[Performance] 项目ID已更新:', e.newValue);
+        }
+      }
+      // 监听性能采集状态变化
+      if (e.key === 'performanceCollectionEnabled') {
+        isPerformanceCollectionEnabled = e.newValue === 'true';
+        if (import.meta.env.DEV) {
+          console.log('[Performance] 性能采集状态已更新:', isPerformanceCollectionEnabled);
         }
       }
     };
@@ -173,7 +280,8 @@ export function initPerformanceMonitoring(projectId?: string) {
   }
 
   if (import.meta.env.DEV) {
-    console.log('[Performance] Web Vitals 性能监控已启用，项目ID:', finalProjectId);
+    console.log('[Performance] Web Vitals 性能监控已初始化，项目ID:', finalProjectId);
+    console.log('[Performance] 性能采集状态:', isPerformanceCollectionEnabled ? '已启用' : '已禁用');
     console.log('[Performance] 监控指标: FCP, LCP, FID, CLS, TTFB, INP');
   }
 }

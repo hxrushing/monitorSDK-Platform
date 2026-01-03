@@ -54,8 +54,14 @@ export interface ErrorEventData {
   lineno?: number;
   colno?: number;
   stack?: string;
-  errorType?: 'js' | 'promise' | 'resource';
+  errorType?: 'js' | 'promise' | 'resource' | 'console';
   url?: string;
+  error?: string; // 错误的字符串表示
+  errorName?: string; // 错误名称（如 Error, TypeError等）
+  reason?: string; // Promise rejection的原因
+  tagName?: string; // 资源加载错误的标签名称
+  type?: string; // 事件类型
+  source?: string; // 错误来源（如 console.error, console.warn）
 }
 
 /**

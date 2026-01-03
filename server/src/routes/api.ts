@@ -10,6 +10,7 @@ import { PredictionRecordService } from '../services/predictionRecordService';
 import { ProjectPermissionService } from '../services/projectPermissionService';
 import { cacheManager } from '../utils/cache';
 import { getRSAPublicKey, decryptRSA } from '../utils/crypto';
+import { getErrorMessage, logError, createErrorResponse } from '../utils/errorHandler';
 import { Pool } from 'mysql2/promise';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -58,13 +59,13 @@ export function createApiRouter(db: Pool, summaryService?: SummaryService) {
           console.log('[Auth] 密码解密成功，长度:', decryptedPassword.length);
         } catch (error) {
           // 解密失败，可能是明文或格式错误
-          console.warn('[Auth] 密码解密失败:', error.message);
+          console.warn('[Auth] 密码解密失败:', getErrorMessage(error));
           console.warn('[Auth] 保持原始密码');
         }
       }
       next();
     } catch (error) {
-      console.error('[Auth] 密码解密中间件错误:', error);
+      logError('[Auth] 密码解密中间件错误', error);
       return res.status(400).json({
         success: false,
         error: '密码格式错误'
@@ -81,7 +82,7 @@ export function createApiRouter(db: Pool, summaryService?: SummaryService) {
         publicKey: publicKey
       });
     } catch (error) {
-      console.error('获取公钥失败:', error);
+      logError('获取公钥失败', error);
       res.status(500).json({
         success: false,
         error: '获取公钥失败'
@@ -121,7 +122,7 @@ export function createApiRouter(db: Pool, summaryService?: SummaryService) {
       }
       res.json(result);
     } catch (error) {
-      console.error('[Login] 登录异常:', error);
+      logError('[Login] 登录异常', error);
       res.status(500).json({
         success: false,
         error: '登录失败，请稍后重试'
@@ -143,7 +144,7 @@ export function createApiRouter(db: Pool, summaryService?: SummaryService) {
 
       const result = await userService.register(username, password, email);
       res.json(result);
-    } catch (error) {
+    } catch (error: any) {
       console.error('注册失败:', error);
       res.status(500).json({
         success: false,
@@ -298,7 +299,7 @@ export function createApiRouter(db: Pool, summaryService?: SummaryService) {
             removeListener();
             console.log(`[SSE] 连接已关闭`);
           }
-        } catch (error) {
+        } catch (error: any) {
           console.error('[SSE] 发送数据失败:', error);
           res.end();
           removeListener();
@@ -309,7 +310,7 @@ export function createApiRouter(db: Pool, summaryService?: SummaryService) {
       const heartbeatInterval = setInterval(() => {
         try {
           res.write(': heartbeat\n\n');
-        } catch (error) {
+        } catch (error: any) {
           clearInterval(heartbeatInterval);
           removeListener();
         }
@@ -393,7 +394,7 @@ export function createApiRouter(db: Pool, summaryService?: SummaryService) {
         }
 
         next();
-      } catch (error) {
+      } catch (error: any) {
         console.error('项目权限验证失败:', error);
         return res.status(500).json({ 
           success: false, 
@@ -432,7 +433,7 @@ export function createApiRouter(db: Pool, summaryService?: SummaryService) {
       }
       await db.execute('UPDATE users SET role = ? WHERE id = ?', [role, id]);
       res.json({ success: true });
-    } catch (error) {
+    } catch (error: any) {
       console.error('更新用户角色失败:', error);
       res.status(500).json({ success: false, error: 'Internal Server Error' });
     }
@@ -548,7 +549,7 @@ export function createApiRouter(db: Pool, summaryService?: SummaryService) {
 
       const events = await eventDefinitionService.getEventDefinitions(projectId);
       res.json({ success: true, data: events });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error getting event definitions:', error);
       res.status(500).json({ success: false, error: 'Internal Server Error' });
     }
@@ -584,7 +585,7 @@ export function createApiRouter(db: Pool, summaryService?: SummaryService) {
         req.body
       );
       res.json({ success: true, data });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error updating event definition:', error);
       res.status(500).json({ success: false, error: 'Internal Server Error' });
     }
@@ -603,7 +604,7 @@ export function createApiRouter(db: Pool, summaryService?: SummaryService) {
 
       await eventDefinitionService.deleteEventDefinition(req.params.id, projectId);
       res.json({ success: true });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error deleting event definition:', error);
       res.status(500).json({ success: false, error: 'Internal Server Error' });
     }
@@ -630,7 +631,7 @@ export function createApiRouter(db: Pool, summaryService?: SummaryService) {
 
       const data = await statsService.getEventAnalysis(params);
       res.json({ success: true, data });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error getting event analysis:', error);
       res.status(500).json({ success: false, error: 'Internal Server Error' });
     }
@@ -657,7 +658,7 @@ export function createApiRouter(db: Pool, summaryService?: SummaryService) {
 
       const data = await statsService.getFunnelAnalysis(params);
       res.json({ success: true, data });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error getting funnel analysis:', error);
       res.status(500).json({ success: false, error: 'Internal Server Error' });
     }
@@ -673,7 +674,7 @@ export function createApiRouter(db: Pool, summaryService?: SummaryService) {
         eventName: req.query.eventName as string
       });
       res.json({ success: true, data });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error getting stats:', error);
       res.status(500).json({ success: false, error: 'Internal Server Error' });
     }
@@ -692,7 +693,7 @@ export function createApiRouter(db: Pool, summaryService?: SummaryService) {
 
       const data = await statsService.getDashboardOverview(projectId);
       res.json({ success: true, data });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error getting dashboard overview:', error);
       res.status(500).json({ success: false, error: 'Internal Server Error' });
     }
@@ -719,7 +720,7 @@ export function createApiRouter(db: Pool, summaryService?: SummaryService) {
 
       const data = await statsService.getPerformanceAnalysis(params);
       res.json({ success: true, data });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error getting performance analysis:', error);
       res.status(500).json({ success: false, error: 'Internal Server Error' });
     }
@@ -761,7 +762,7 @@ export function createApiRouter(db: Pool, summaryService?: SummaryService) {
         success: true, 
         data: { id, name, description, owner_id: userId } 
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error creating project:', error);
       res.status(500).json({ success: false, error: 'Internal Server Error' });
     }
@@ -790,7 +791,7 @@ export function createApiRouter(db: Pool, summaryService?: SummaryService) {
       }
 
       res.json({ success: true, data: projects });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error getting projects:', error);
       res.status(500).json({ success: false, error: 'Internal Server Error' });
     }
@@ -814,7 +815,7 @@ export function createApiRouter(db: Pool, summaryService?: SummaryService) {
       }
 
       res.json({ success: true, data: rows[0] });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error getting project detail:', error);
       res.status(500).json({ success: false, error: 'Internal Server Error' });
     }
@@ -839,7 +840,7 @@ export function createApiRouter(db: Pool, summaryService?: SummaryService) {
       );
       
       res.json({ success: true, data });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error getting top projects:', error);
       res.status(500).json({ success: false, error: 'Internal Server Error' });
     }
@@ -857,7 +858,7 @@ export function createApiRouter(db: Pool, summaryService?: SummaryService) {
 
         const setting = await summaryService.getUserSetting(userId);
         res.json({ success: true, data: setting });
-      } catch (error) {
+      } catch (error: any) {
         console.error('获取总结设置失败:', error);
         res.status(500).json({ success: false, error: 'Internal Server Error' });
       }
@@ -973,7 +974,7 @@ export function createApiRouter(db: Pool, summaryService?: SummaryService) {
           mlServiceUrl: process.env.ML_SERVICE_URL || 'http://localhost:5000'
         } 
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('检查ML服务状态失败:', error);
       res.status(500).json({ success: false, error: 'Internal Server Error' });
     }

@@ -23,6 +23,7 @@ import logo2 from '@/assets/logo2.jpg';
 import useGlobalStore from '@/store/globalStore';
 import OptimizedImage from '@/components/OptimizedImage';
 import PreloadResources from '@/components/PreloadResources';
+import { setPerformanceCollectionEnabled } from '@/utils/performance';
 
 const { Header, Sider, Content } = Layout;
 const { Option } = Select;
@@ -48,6 +49,8 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   const siteSettings = useGlobalStore(state => state.siteSettings);
   const selectedProjectId = useGlobalStore(state => state.selectedProjectId);
   const setSelectedProjectId = useGlobalStore(state => state.setSelectedProjectId);
+  const performanceCollectionEnabled = useGlobalStore(state => state.performanceCollectionEnabled);
+  const setPerformanceCollectionEnabledStore = useGlobalStore(state => state.setPerformanceCollectionEnabled);
   const [isDragging, setIsDragging] = useState(false);
   const userInfoRef = useRef<HTMLDivElement>(null);
   const logoRef = useRef<HTMLDivElement>(null);
@@ -280,6 +283,13 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
       setSelectedProjectId(projectId);
       message.success(`已切换到项目: ${project.name}`);
     }
+  };
+
+  // 处理性能采集开关切换
+  const handlePerformanceCollectionToggle = (enabled: boolean) => {
+    setPerformanceCollectionEnabledStore(enabled);
+    setPerformanceCollectionEnabled(enabled);
+    message.success(`性能数据采集已${enabled ? '启用' : '禁用'}`);
   };
 
   // 根据当前路径，自动展开所属分组
@@ -527,6 +537,20 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
             />
             <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
               <span style={{ fontWeight: 600 }}>{siteSettings.siteName}</span>
+              <Tooltip title={performanceCollectionEnabled ? '点击禁用性能数据采集（飞行模式）' : '点击启用性能数据采集'}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ fontSize: '14px', color: performanceCollectionEnabled ? 'inherit' : '#ff4d4f' }}>
+                    ✈️
+                  </span>
+                  <Switch
+                    checked={!performanceCollectionEnabled}
+                    onChange={(checked) => handlePerformanceCollectionToggle(!checked)}
+                    style={{
+                      minWidth: '44px'
+                    }}
+                  />
+                </div>
+              </Tooltip>
               <Tooltip title={themeMode === 'dark' ? '切换为浅色' : '切换为暗色'}>
                 <Switch
                   checkedChildren="🌙"

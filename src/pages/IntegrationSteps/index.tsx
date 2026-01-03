@@ -1,11 +1,12 @@
 import React from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { Card, Typography, Alert, Breadcrumb, Tag, Space, Row, Col, message, Tabs, Button, Collapse, Table, Descriptions, Divider, Steps } from 'antd';
-import { HomeOutlined, CopyOutlined, CodeOutlined, GlobalOutlined, SettingOutlined, PlayCircleOutlined, CheckCircleFilled, CloseCircleOutlined, InfoCircleOutlined, ArrowLeftOutlined } from '@ant-design/icons';
+import { HomeOutlined, CopyOutlined, CodeOutlined, GlobalOutlined, SettingOutlined, PlayCircleOutlined, CheckCircleFilled, CloseCircleOutlined, InfoCircleOutlined, ArrowLeftOutlined, DownloadOutlined } from '@ant-design/icons';
 import useGlobalStore from '@/store/globalStore';
 import { apiService } from '@/services/api';
 import type { EventDefinition } from '@/types';
 import { init, type SDKInstance } from '@/sdk';
+import { downloadSDKAsZip } from '@/utils/downloadSDK';
 
 const { Title, Paragraph, Text } = Typography;
 
@@ -370,6 +371,34 @@ const sdk = init({
         <Paragraph>
           选择适合您项目的引入方式。推荐使用 ES6 模块引入，便于代码管理和构建优化。
         </Paragraph>
+
+        {/* 下载SDK按钮 */}
+        <div style={{ marginTop: 16, marginBottom: 16 }}>
+          <Button
+            type="primary"
+            icon={<DownloadOutlined />}
+            size="large"
+            onClick={async () => {
+              try {
+                message.loading({ content: '正在准备SDK文件...', key: 'download-sdk' });
+                await downloadSDKAsZip(projectId);
+                message.success({ content: 'SDK下载成功！', key: 'download-sdk', duration: 3 });
+              } catch (error: any) {
+                console.error('下载SDK失败:', error);
+                message.error({ 
+                  content: `下载失败: ${error.message || '请确保SDK已构建'}`,
+                  key: 'download-sdk',
+                  duration: 5
+                });
+              }
+            }}
+          >
+            下载SDK
+          </Button>
+          <Text type="secondary" style={{ marginLeft: 12, fontSize: '12px' }}>
+            点击下载完整的SDK文件包（ZIP格式）
+          </Text>
+        </div>
 
         <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
           {/* ES6 模块引入 */}

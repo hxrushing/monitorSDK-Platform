@@ -97,7 +97,13 @@ const getProjectId = (): string => {
   return storedProjectId || 'demo-project';
 };
 
-initPerformanceMonitoring(getProjectId());
+// 从 localStorage 获取性能采集状态
+const getPerformanceCollectionEnabled = (): boolean => {
+  const stored = localStorage.getItem('performanceCollectionEnabled');
+  return stored !== null ? stored === 'true' : true; // 默认开启
+};
+
+initPerformanceMonitoring(getProjectId(), getPerformanceCollectionEnabled());
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>

@@ -115,7 +115,6 @@ export class PerformanceProbe implements Probe {
         if (Math.random() > longTaskSampleRate) {
           return; // 被采样过滤
         }
-
         for (const entry of list.getEntries()) {
           // 长任务通常超过50ms
           if (entry.duration > 50 && this.reporter) {

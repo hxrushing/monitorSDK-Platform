@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import path from 'path'
+import fs from 'fs'
 import removeConsole from 'vite-plugin-remove-console'
 
 // https://vite.dev/config/
@@ -13,6 +14,61 @@ export default defineConfig({
       includes: ['log', 'info', 'debug', 'trace'],
       // 不包含 error 和 warn，保留它们用于错误追踪
     }),
+    // 自定义插件：在开发环境中服务 dist/sdk 目录
+    {
+      name: 'serve-sdk',
+      configureServer(server) {
+        server.middlewares.use('/sdk', (req, res, next) => {
+          try {
+            // 移除查询字符串和hash
+            const urlPath = req.url?.split('?')[0].split('#')[0] || ''
+            // 移除前导斜杠，避免路径解析问题
+            const relativePath = urlPath.startsWith('/') ? urlPath.slice(1) : urlPath
+            const filePath = path.resolve(__dirname, 'dist/sdk', relativePath)
+            
+            // 安全检查：确保路径在 dist/sdk 目录内
+            const distSdkPath = path.resolve(__dirname, 'dist/sdk')
+            const normalizedFilePath = path.normalize(filePath)
+            const normalizedDistSdkPath = path.normalize(distSdkPath)
+            
+            if (!normalizedFilePath.startsWith(normalizedDistSdkPath + path.sep) && 
+                normalizedFilePath !== normalizedDistSdkPath) {
+              res.statusCode = 403
+              res.end('Forbidden')
+              return
+            }
+
+            // 检查文件是否存在
+            if (fs.existsSync(normalizedFilePath) && fs.statSync(normalizedFilePath).isFile()) {
+              const content = fs.readFileSync(normalizedFilePath)
+              const ext = path.extname(normalizedFilePath)
+              
+              // 设置正确的 Content-Type
+              const mimeTypes: Record<string, string> = {
+                '.js': 'application/javascript',
+                '.map': 'application/json',
+                '.d.ts': 'text/typescript',
+                '.d.cts': 'text/typescript',
+                '.cjs': 'application/javascript',
+              }
+              
+              res.setHeader('Content-Type', mimeTypes[ext] || 'application/octet-stream')
+              res.setHeader('Content-Length', content.length.toString())
+              // 添加CORS头，允许跨域访问
+              res.setHeader('Access-Control-Allow-Origin', '*')
+              res.end(content)
+            } else {
+              res.statusCode = 404
+              res.end('Not Found')
+            }
+          } catch (error) {
+            console.error('SDK文件服务错误:', error)
+            res.statusCode = 500
+            res.end('Internal Server Error')
+          }
+        })
+      },
+    },
   ],
   resolve: {
     alias: {

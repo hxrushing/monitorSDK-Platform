@@ -24,6 +24,8 @@ interface GlobalState {
   setSiteSettings: (settings: Partial<GlobalState['siteSettings']>) => void
   selectedProjectId: string
   setSelectedProjectId: (projectId: string) => void
+  performanceCollectionEnabled: boolean
+  setPerformanceCollectionEnabled: (enabled: boolean) => void
 }
 
 // 从localStorage获取初始用户信息
@@ -42,6 +44,13 @@ const getInitialThemeMode = (): 'light' | 'dark' => {
 const getInitialProjectId = (): string => {
   const storedProjectId = localStorage.getItem('selectedProjectId');
   return storedProjectId || 'demo-project';
+};
+
+// 从localStorage获取初始性能采集状态
+const getInitialPerformanceCollectionEnabled = (): boolean => {
+  const stored = localStorage.getItem('performanceCollectionEnabled');
+  // 默认值为 true（默认开启）
+  return stored !== null ? stored === 'true' : true;
 };
 
 const getInitialSiteSettings = () => {
@@ -102,6 +111,11 @@ const useGlobalStore = create<GlobalState>(set => ({
   setSelectedProjectId: (projectId) => {
     localStorage.setItem('selectedProjectId', projectId);
     set({ selectedProjectId: projectId });
+  },
+  performanceCollectionEnabled: getInitialPerformanceCollectionEnabled(),
+  setPerformanceCollectionEnabled: (enabled) => {
+    localStorage.setItem('performanceCollectionEnabled', String(enabled));
+    set({ performanceCollectionEnabled: enabled });
   }
 }))
 export default useGlobalStore

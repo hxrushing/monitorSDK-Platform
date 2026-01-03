@@ -1,7 +1,10 @@
 import React, { useState } from 'react';
-import { Layout, Menu, Select } from 'antd';
+import { Layout, Menu, Select, Button, message } from 'antd';
+import { PlayCircleOutlined, StopOutlined } from '@ant-design/icons';
 import Dashboard from '../components/Dashboard';
 import EventDefinitionManager from '../components/EventDefinitionManager';
+import useGlobalStore from '../store/globalStore';
+import { setPerformanceCollectionEnabled as setPerformanceMonitoringEnabled } from '../utils/performance';
 
 const { Header, Content } = Layout;
 
@@ -18,6 +21,24 @@ const menuItems = [
 const Home: React.FC = () => {
   const [selectedProject, setSelectedProject] = useState(projects[0].value);
   const [selectedMenu, setSelectedMenu] = useState('dashboard');
+  const performanceCollectionEnabled = useGlobalStore(state => state.performanceCollectionEnabled);
+  const setPerformanceCollectionEnabled = useGlobalStore(state => state.setPerformanceCollectionEnabled);
+
+  // 处理性能采集开关切换
+  const handleTogglePerformanceCollection = () => {
+    const newState = !performanceCollectionEnabled;
+    
+    // 同时更新 globalStore 和 performance.ts 中的状态
+    setPerformanceCollectionEnabled(newState);
+    setPerformanceMonitoringEnabled(newState);
+    
+    // 显示用户提示
+    if (newState) {
+      message.success('性能采集已开启');
+    } else {
+      message.info('性能采集已关闭');
+    }
+  };
 
   const renderContent = () => {
     switch (selectedMenu) {
@@ -42,6 +63,15 @@ const Home: React.FC = () => {
           options={projects}
           style={{ width: 200, marginRight: 24 }}
         />
+        <Button
+          type={performanceCollectionEnabled ? 'default' : 'primary'}
+          danger={performanceCollectionEnabled}
+          icon={performanceCollectionEnabled ? <StopOutlined /> : <PlayCircleOutlined />}
+          onClick={handleTogglePerformanceCollection}
+          style={{ marginRight: 24 }}
+        >
+          {performanceCollectionEnabled ? '一键关闭' : '一键开始'}
+        </Button>
         <Menu
           theme="dark"
           mode="horizontal"

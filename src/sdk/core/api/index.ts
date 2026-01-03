@@ -194,6 +194,12 @@ export class SDKCore {
    * 跟踪自定义事件
    */
   public track(eventName: string, eventParams?: Record<string, any>, priority: 'high' | 'normal' | 'low' = 'normal'): void {
+    // 检查性能采集是否已禁用（从localStorage读取）
+    const performanceCollectionEnabled = localStorage.getItem('performanceCollectionEnabled');
+    if (performanceCollectionEnabled === 'false') {
+      return;
+    }
+
     // 采样率检查
     if (this.config.sampleRate.behavior !== undefined && Math.random() > this.config.sampleRate.behavior) {
       if (this.config.debug) {
@@ -213,6 +219,12 @@ export class SDKCore {
    * 跟踪错误
    */
   public trackError(errorType: string, errorDetails: Record<string, any>): void {
+    // 检查性能采集是否已禁用（从localStorage读取）
+    const performanceCollectionEnabled = localStorage.getItem('performanceCollectionEnabled');
+    if (performanceCollectionEnabled === 'false') {
+      return;
+    }
+
     // 采样率检查
     if (this.config.sampleRate.error !== undefined && Math.random() > this.config.sampleRate.error) {
       return;
@@ -250,6 +262,12 @@ export class SDKCore {
     responseSize?: number;
     extra?: Record<string, any>;
   }): void {
+    // 检查性能采集是否已禁用（从localStorage读取）
+    const performanceCollectionEnabled = localStorage.getItem('performanceCollectionEnabled');
+    if (performanceCollectionEnabled === 'false') {
+      return;
+    }
+
     // URL忽略检查
     if (this.config.http.ignoreUrls && this.shouldIgnoreUrl(info.url)) {
       return;
@@ -276,6 +294,12 @@ export class SDKCore {
    * 跟踪性能指标
    */
   public trackPerf(metrics: Record<string, any>): void {
+    // 检查性能采集是否已禁用（从localStorage读取）
+    const performanceCollectionEnabled = localStorage.getItem('performanceCollectionEnabled');
+    if (performanceCollectionEnabled === 'false') {
+      return;
+    }
+
     // 采样率检查
     if (this.config.sampleRate.perf !== undefined && Math.random() > this.config.sampleRate.perf) {
       return;
