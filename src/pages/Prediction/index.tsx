@@ -101,7 +101,7 @@ const Prediction: React.FC = () => {
 
   // 预测单个指标
   const handlePredict = async () => {
-    if (!selectedProjectId) {
+    if (!selectedProjectId || selectedProjectId === 'demo-project') {
       message.warning('请先选择项目');
       return;
     }
@@ -164,7 +164,7 @@ const Prediction: React.FC = () => {
 
   // 批量预测
   const handleBatchPredict = async () => {
-    if (!selectedProjectId) {
+    if (!selectedProjectId || selectedProjectId === 'demo-project') {
       message.warning('请先选择项目');
       return;
     }

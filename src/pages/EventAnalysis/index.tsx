@@ -48,6 +48,13 @@ const EventAnalysis: React.FC = () => {
 
   // 获取事件定义列表
   const fetchEventDefinitions = async () => {
+    // 如果没有选中的项目或者是 demo-project，不发送请求
+    if (!selectedProjectId || selectedProjectId === 'demo-project') {
+      setEventOptions([]);
+      setSelectedEvents([]);
+      return;
+    }
+    
     try {
       const events = await apiService.getEventDefinitions(selectedProjectId);
       setEventOptions(events);
@@ -55,11 +62,20 @@ const EventAnalysis: React.FC = () => {
     } catch (error) {
       message.error('获取事件列表失败');
       console.error('Error fetching event definitions:', error);
+      // 请求失败时清空数据
+      setEventOptions([]);
+      setSelectedEvents([]);
     }
   };
 
   // 获取分析数据
   const fetchAnalysisData = async () => {
+    // 如果没有选中的项目或者是 demo-project，不发送请求
+    if (!selectedProjectId || selectedProjectId === 'demo-project') {
+      setAnalysisData([]);
+      return;
+    }
+    
     if (selectedEvents.length === 0) {
       setAnalysisData([]);
       return;

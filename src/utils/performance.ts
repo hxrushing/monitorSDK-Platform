@@ -38,10 +38,14 @@ function getSDKInstance(): SDKInstance | null {
     // 如果全局变量没有，尝试从 localStorage 获取
     if (!projectId) {
       const storedProjectId = localStorage.getItem('selectedProjectId');
-      projectId = storedProjectId || 'demo-project';
+      // 不返回 demo-project 作为默认值
+      if (storedProjectId && storedProjectId !== 'demo-project') {
+        projectId = storedProjectId;
+      }
     }
     
-    if (!projectId) {
+    // 如果项目ID为空或者是 demo-project，不初始化SDK
+    if (!projectId || projectId === 'demo-project') {
       return null;
     }
 
@@ -193,7 +197,18 @@ export function setPerformanceCollectionEnabled(enabled: boolean) {
   if (!enabled && cachedSDKInstance) {
     try {
       // 获取SDKCore实例并销毁
-      const projectId = (window as any).__ANALYTICS_PROJECT_ID__ || localStorage.getItem('selectedProjectId') || 'demo-project';
+      let projectId = (window as any).__ANALYTICS_PROJECT_ID__;
+      if (!projectId) {
+        const storedProjectId = localStorage.getItem('selectedProjectId');
+        if (storedProjectId && storedProjectId !== 'demo-project') {
+          projectId = storedProjectId;
+        }
+      }
+      // 如果没有有效的项目ID，跳过销毁
+      if (!projectId || projectId === 'demo-project') {
+        cachedSDKInstance = null;
+        return;
+      }
       const endpoint = '/api/track';
       
       // 导入SDKCore以访问静态方法和实例
@@ -231,8 +246,22 @@ export function setPerformanceCollectionEnabled(enabled: boolean) {
  * @param enabled 是否启用性能采集，如果不提供则从 localStorage 读取
  */
 export function initPerformanceMonitoring(projectId?: string, enabled?: boolean) {
-  // 获取项目ID
-  const finalProjectId = projectId || localStorage.getItem('selectedProjectId') || 'demo-project';
+  // 获取项目ID，不返回 demo-project 作为默认值
+  let finalProjectId = projectId;
+  if (!finalProjectId) {
+    const storedProjectId = localStorage.getItem('selectedProjectId');
+    if (storedProjectId && storedProjectId !== 'demo-project') {
+      finalProjectId = storedProjectId;
+    }
+  }
+  
+  // 如果没有有效的项目ID，不初始化性能监控
+  if (!finalProjectId || finalProjectId === 'demo-project') {
+    if (import.meta.env.DEV) {
+      console.log('[Performance] 未提供有效的项目ID，跳过性能监控初始化');
+    }
+    return;
+  }
   
   // 获取性能采集状态（如果未传入，从 localStorage 读取）
   if (enabled === undefined) {

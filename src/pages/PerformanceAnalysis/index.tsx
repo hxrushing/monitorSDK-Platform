@@ -61,6 +61,13 @@ const PerformanceAnalysis: React.FC = () => {
 
   // 获取性能数据
   const fetchPerformanceData = async () => {
+    // 如果没有选中的项目或者是 demo-project，不发送请求
+    if (!selectedProjectId || selectedProjectId === 'demo-project') {
+      setPerformanceData([]);
+      setSummaryData([]);
+      return;
+    }
+    
     if (selectedMetrics.length === 0) {
       setPerformanceData([]);
       setSummaryData([]);

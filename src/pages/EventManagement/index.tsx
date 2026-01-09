@@ -42,6 +42,13 @@ const EventManagement: React.FC = () => {
 
   // 获取事件定义列表
   const fetchDefinitions = async () => {
+    // 如果没有选中的项目或者是 demo-project，不发送请求
+    if (!selectedProjectId || selectedProjectId === 'demo-project') {
+      setDefinitions([]);
+      setTotal(0);
+      return;
+    }
+    
     try {
       setLoading(true);
       const data = await apiService.getEventDefinitions(selectedProjectId);
@@ -49,6 +56,9 @@ const EventManagement: React.FC = () => {
       setTotal(data.length);
     } catch (error) {
       message.error('获取事件定义失败');
+      // 请求失败时清空数据
+      setDefinitions([]);
+      setTotal(0);
     } finally {
       setLoading(false);
     }

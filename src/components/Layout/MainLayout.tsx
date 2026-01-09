@@ -76,18 +76,42 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   const fetchProjects = async () => {
     try {
       const projectList = await apiService.getProjects();
-      setProjects(projectList);
-      // 如果没有选中的项目，选择第一个
-      if (!selectedProjectId && projectList.length > 0) {
-        setSelectedProjectId(projectList[0].id);
+      // 过滤掉 demo-project
+      const filteredProjects = projectList.filter(project => project.id !== 'demo-project');
+      setProjects(filteredProjects);
+      
+      // 使用最新的 selectedProjectId 进行验证（从 store 中获取）
+      const currentProjectId = useGlobalStore.getState().selectedProjectId;
+      
+      // 验证当前选中的项目ID是否在有效项目列表中
+      if (currentProjectId) {
+        const isValidProject = filteredProjects.some(p => p.id === currentProjectId);
+        // 如果当前选中的项目不在有效列表中（包括 demo-project），清除选择
+        if (!isValidProject || currentProjectId === 'demo-project') {
+          setSelectedProjectId('');
+          localStorage.removeItem('selectedProjectId');
+        }
+      }
+      
+      // 如果没有选中的项目，选择第一个（过滤后的列表）
+      const finalProjectId = useGlobalStore.getState().selectedProjectId;
+      if (!finalProjectId && filteredProjects.length > 0) {
+        setSelectedProjectId(filteredProjects[0].id);
       }
     } catch (error) {
       message.error('获取项目列表失败');
+      // 获取失败时，如果当前有选中的项目，也清除它（可能是无效的）
+      const currentProjectId = useGlobalStore.getState().selectedProjectId;
+      if (currentProjectId) {
+        setSelectedProjectId('');
+        localStorage.removeItem('selectedProjectId');
+      }
     }
   };
 
   useEffect(() => {
     fetchProjects();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // 键盘快捷键监听
@@ -560,9 +584,23 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
                 />
               </Tooltip>
               <Select
-                value={selectedProjectId}
+                value={selectedProjectId && projects.some(p => p.id === selectedProjectId) ? selectedProjectId : undefined}
                 style={{ width: 200 }}
                 onChange={handleProjectChange}
+                placeholder={projects.length === 0 ? "暂无项目，请创建" : "请选择项目"}
+                disabled={projects.length === 0}
+                allowClear
+                notFoundContent={
+                  projects.length === 0 ? (
+                    <div style={{ padding: '8px 0', textAlign: 'center', color: '#999' }}>
+                      暂无项目，请点击"创建项目"按钮创建您的第一个项目
+                    </div>
+                  ) : (
+                    <div style={{ padding: '8px 0', textAlign: 'center', color: '#999' }}>
+                      未找到项目
+                    </div>
+                  )
+                }
               >
                 {projects.map(project => (
                   <Option key={project.id} value={project.id}>
@@ -570,6 +608,13 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
                   </Option>
                 ))}
               </Select>
+              {projects.length === 0 && (
+                <Tooltip title="您还没有关联任何项目，请先创建项目">
+                  <span style={{ color: '#ff4d4f', fontSize: '12px', marginLeft: '8px' }}>
+                    ⚠️ 请创建项目
+                  </span>
+                </Tooltip>
+              )}
               {selectedProjectId && (
                 <Button 
                   icon={<BookOutlined />}

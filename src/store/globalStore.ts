@@ -43,7 +43,11 @@ const getInitialThemeMode = (): 'light' | 'dark' => {
 // 从localStorage获取初始项目ID
 const getInitialProjectId = (): string => {
   const storedProjectId = localStorage.getItem('selectedProjectId');
-  return storedProjectId || 'demo-project';
+  // 不返回 demo-project 作为默认值
+  if (storedProjectId && storedProjectId !== 'demo-project') {
+    return storedProjectId;
+  }
+  return '';
 };
 
 // 从localStorage获取初始性能采集状态

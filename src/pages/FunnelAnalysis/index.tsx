@@ -22,6 +22,13 @@ const FunnelAnalysis: React.FC = () => {
 
   // 获取事件定义列表
   const fetchEventDefinitions = async () => {
+    // 如果没有选中的项目或者是 demo-project，不发送请求
+    if (!selectedProjectId || selectedProjectId === 'demo-project') {
+      setEventOptions([]);
+      setSelectedStages([]);
+      return;
+    }
+    
     try {
       const events = await apiService.getEventDefinitions(selectedProjectId);
       setEventOptions(events);
@@ -30,11 +37,20 @@ const FunnelAnalysis: React.FC = () => {
     } catch (error) {
       message.error('获取事件列表失败');
       console.error('Error fetching event definitions:', error);
+      // 请求失败时清空数据
+      setEventOptions([]);
+      setSelectedStages([]);
     }
   };
 
   // 获取漏斗数据
   const fetchFunnelData = async () => {
+    // 如果没有选中的项目或者是 demo-project，不发送请求
+    if (!selectedProjectId || selectedProjectId === 'demo-project') {
+      setFunnelData([]);
+      return;
+    }
+    
     if (selectedStages.length === 0) {
       setFunnelData([]);
       return;

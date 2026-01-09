@@ -13,7 +13,7 @@ import {
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useNavigate } from 'react-router-dom';
-import { apiService } from '@/services/api';
+import { apiService, Project } from '@/services/api';
 import type { TopProject } from '@/services/api';
 import FloatingPanel from '@/components/FloatingPanel';
 import useGlobalStore from '@/store/globalStore';
@@ -43,7 +43,9 @@ const Dashboard: React.FC = () => {
   });
   const [topProjects, setTopProjects] = useState<TopProject[]>([]);
   const [showHelp, setShowHelp] = useState(false);
+  const [validProjects, setValidProjects] = useState<Project[]>([]);
   const selectedProjectId = useGlobalStore(state => state.selectedProjectId);
+  const setSelectedProjectId = useGlobalStore(state => state.setSelectedProjectId);
   
   // 使用 Worker 处理大数据采样
   const [sampledChartData, setSampledChartData] = useState<any[]>([]);
@@ -59,8 +61,48 @@ const Dashboard: React.FC = () => {
     }
   );
 
+  // 获取项目列表并验证 selectedProjectId
+  useEffect(() => {
+    const fetchAndValidateProjects = async () => {
+      try {
+        const projectList = await apiService.getProjects();
+        // 过滤掉 demo-project
+        const filteredProjects = projectList.filter(project => project.id !== 'demo-project');
+        setValidProjects(filteredProjects);
+        
+        // 验证当前选中的项目ID是否在有效列表中
+        if (selectedProjectId) {
+          const isValidProject = filteredProjects.some(p => p.id === selectedProjectId);
+          // 如果当前选中的项目不在有效列表中，清除选择
+          if (!isValidProject || selectedProjectId === 'demo-project') {
+            setSelectedProjectId('');
+            localStorage.removeItem('selectedProjectId');
+          }
+        }
+      } catch (error) {
+        console.error('获取项目列表失败:', error);
+        // 如果获取失败，清空项目列表
+        setValidProjects([]);
+        // 清除可能无效的 selectedProjectId
+        if (selectedProjectId) {
+          setSelectedProjectId('');
+          localStorage.removeItem('selectedProjectId');
+        }
+      }
+    };
+    
+    fetchAndValidateProjects();
+  }, [selectedProjectId, setSelectedProjectId]);
+
   const fetchData = useCallback(async () => {
+    // 如果没有选中的项目，或者选中的项目不在有效项目列表中，不发送请求
     if (!selectedProjectId) {
+      return;
+    }
+    
+    // 验证 selectedProjectId 是否在有效项目列表中
+    const isValidProject = validProjects.some(p => p.id === selectedProjectId);
+    if (!isValidProject || selectedProjectId === 'demo-project') {
       return;
     }
     
@@ -142,7 +184,7 @@ const Dashboard: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [dateRange, selectedProjectId]);
+  }, [dateRange, selectedProjectId, validProjects]);
 
   useEffect(() => {
     fetchData();

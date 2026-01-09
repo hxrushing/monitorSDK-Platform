@@ -91,10 +91,14 @@ const Root = () => {
 }
 
 // 初始化性能监控
-// 从 localStorage 获取项目ID，如果不存在则使用默认值
+// 从 localStorage 获取项目ID，不返回 demo-project 作为默认值
 const getProjectId = (): string => {
   const storedProjectId = localStorage.getItem('selectedProjectId');
-  return storedProjectId || 'demo-project';
+  // 如果存储的项目ID是 demo-project，返回空字符串，不初始化监控
+  if (storedProjectId && storedProjectId !== 'demo-project') {
+    return storedProjectId;
+  }
+  return '';
 };
 
 // 从 localStorage 获取性能采集状态
