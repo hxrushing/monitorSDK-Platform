@@ -55,7 +55,6 @@ const Prediction: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [healthCheckLoading, setHealthCheckLoading] = useState(false);
   const [mlServiceAvailable, setMlServiceAvailable] = useState<boolean | null>(null);
-  const [mlServiceUrl, setMlServiceUrl] = useState<string>('');
   const healthCheckRef = useRef(false); // 防止重复检查
 
   // 预测参数
@@ -73,7 +72,6 @@ const Prediction: React.FC = () => {
     try {
       const result = await apiService.checkPredictionHealth();
       setMlServiceAvailable(result.mlServiceAvailable);
-      setMlServiceUrl(result.mlServiceUrl || '');
       if (showMessage) {
         if (result.mlServiceAvailable) {
           message.success('ML预测服务连接正常');
@@ -291,9 +289,6 @@ const Prediction: React.FC = () => {
               不可用
             </Tag>
           )}
-          {mlServiceUrl && (
-            <Tag color="blue">服务地址: {mlServiceUrl}</Tag>
-          )}
           <Button
             size="small"
             icon={<ReloadOutlined />}
@@ -323,7 +318,6 @@ const Prediction: React.FC = () => {
                 <li>安装依赖：<code>pip install -r requirements.txt</code></li>
                 <li>启动服务：<code>python app.py</code></li>
               </ol>
-              <p>服务默认运行在 <code>http://localhost:5000</code></p>
             </div>
           }
           type="warning"
